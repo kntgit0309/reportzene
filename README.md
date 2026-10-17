@@ -54,6 +54,14 @@ cd ../backend && uv run pytest -q              # 42 test
 
 ## Deploy
 
+**Tự động (mặc định):** push / merge vào `main` là đủ. Trên macminiwork, launchd `com.isuccess.reportzene-autodeploy`
+chạy `deploy/autodeploy.sh` mỗi phút: thấy commit mới → `pytest` → build web → rsync sang `~/reportzene` → restart → health check.
+Test hoặc build lỗi thì **không deploy** commit đó (và không thử lại tới khi có commit mới).
+Xem kết quả: `ssh macminiwork tail -20 ~/reportzene-autodeploy/autodeploy.log` (log test/build: `last_tests.log`, `last_build.log`).
+Clone dùng deploy key read-only `~/.ssh/reportzene_deploy` (host alias `github-reportzene`).
+
+**Tay** (khi cần đổi plist launchd: SSO key/secret, allow-list):
+
 `bash deploy/deploy.sh` → test + build → rsync lên macminiwork `~/reportzene` → launchd `online.kntmcptools.reportzene`,
 uvicorn `100.96.215.29:8870`. Key/secret SSO được giữ trong plist qua mỗi lần deploy (đổi: `POD_APP_KEY=… POD_APP_SECRET=… bash deploy/deploy.sh`).
 
