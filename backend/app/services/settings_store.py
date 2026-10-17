@@ -1,4 +1,4 @@
-"""Runtime settings saved from the Settings page: trackingis token + Lark app (secrets encrypted at rest), ZenE teams."""
+"""Runtime settings saved from the Settings page: trackingis token + Lark app (secrets encrypted at rest), ZenE teams, plan sheet."""
 import base64
 import hashlib
 import os
@@ -15,6 +15,7 @@ KEY = "runtime"
 SECRET_FIELDS = ("trackingis_token", "lark_app_secret")
 PLAIN_FIELDS = ("lark_app_id",)
 LIST_FIELDS = ("default_teams",)
+INT_FIELDS = ("plan_sheet_id", "plan_start_column", "plan_products")  # plan_sheet_id 0 = no plan sheet
 SECRET_FILE = BASE_DIR / "data" / "secret.key"
 
 
@@ -24,6 +25,9 @@ class Runtime:
     default_teams: list[str]
     lark_app_id: str = ""
     lark_app_secret: str = ""
+    plan_sheet_id: int | None = None
+    plan_start_column: int = 17
+    plan_products: int = 11
 
     @property
     def trackingis_ready(self) -> bool:
@@ -84,6 +88,9 @@ def runtime(db: Session) -> Runtime:
         default_teams=_split(s.get("default_teams") if "default_teams" in s else settings.default_teams),
         lark_app_id=s.get("lark_app_id") or settings.lark_app_id,
         lark_app_secret=_decrypt(s.get("lark_app_secret")) or settings.lark_app_secret,
+        plan_sheet_id=int(s.get("plan_sheet_id") or 0) or None,
+        plan_start_column=int(s.get("plan_start_column") or settings.plan_start_column),
+        plan_products=int(s.get("plan_products") or settings.plan_products),
     )
 
 
@@ -94,11 +101,12 @@ def _hint(value: str) -> str:
 def status(db: Session) -> dict[str, Any]:
     rt = runtime(db)
     return {"trackingis_token": _hint(rt.trackingis_token), "trackingis_url": settings.trackingis_url,
-            "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret)}
+            "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret),
+            "plan_sheet_id": rt.plan_sheet_id, "plan_start_column": rt.plan_start_column, "plan_products": rt.plan_products}
 
 
 def save(db: Session, changes: dict[str, Any]) -> None:
-    """Secret fields: "" keeps the saved value, None removes it. Plain/list fields: None keeps."""
+    """Secret fields: "" keeps the saved value, None removes it. Plain/list/int fields: None keeps."""
     value = _stored(db)
     for f in SECRET_FIELDS:
         new = changes.get(f, "")
@@ -112,6 +120,9 @@ def save(db: Session, changes: dict[str, Any]) -> None:
     for f in LIST_FIELDS:
         if changes.get(f) is not None:
             value[f] = _split(changes[f])
+    for f in INT_FIELDS:
+        if changes.get(f) is not None:
+            value[f] = int(changes[f])
     row = db.get(AppSetting, KEY)
     if row is None:
         db.add(AppSetting(key=KEY, value=value))

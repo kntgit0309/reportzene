@@ -63,3 +63,13 @@ export type Sheet = {
   row_count: number; last_error: string | null; last_synced_at: string | null
 }
 export type SheetTab = { sheet_id: string; title: string; rows: number }
+
+/** One product of the plan (or the total); monthly lists follow `Plan.months`. */
+export type PlanLine = {
+  product: string; pl2_per_item: number | null; total_sales: number | null; total_pl2: number | null; share: number | null
+  sales: (number | null)[]; sales_per_day: (number | null)[]; pl2: (number | null)[]
+}
+export type Plan = {
+  sheet: Sheet; start_column: number; column_letter: string; max_products: number
+  months: string[]; products: PlanLine[]; total: PlanLine
+}

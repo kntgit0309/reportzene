@@ -18,13 +18,13 @@ from app.core.security import hash_password
 from app.db import Base, SessionLocal, engine
 from app.db_migrate import add_missing_columns
 from app.models import User
-from app.routers import auth, report, sheets, tokens, users
+from app.routers import auth, plan, report, sheets, tokens, users
 from app.routers import settings as settings_router
 from app.services.naming import clean_code
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("rzn")
-ROUTERS = (auth, tokens, users, report, sheets, settings_router)
+ROUTERS = (auth, tokens, users, report, plan, sheets, settings_router)
 
 
 def bootstrap_admin() -> None:
