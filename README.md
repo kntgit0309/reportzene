@@ -11,7 +11,7 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 
 | Trang | Nội dung |
 |---|---|
-| Etsy › Report | 6 view giống trang Report Etsy của trackingis: Date (mở ra từng store), Order, Product, Store (mở ra từng ngày), Seller, Product type. Filter ngày, keyword, store, seller, designer, product type, team, total order. Ô KPI: revenue, orders, quantity, AOV, total, sale tax. Chart + export CSV. |
+| Etsy › Report | 6 view giống trang Report Etsy của trackingis: Date (mở ra từng store), Order, Product, Store (mở ra từng ngày), Seller, Product type. Filter ngày, keyword, store, seller, designer, product type, sub product type, team, total order. Ô KPI: revenue, orders, quantity, AOV, total, sale tax. Chart + export CSV. |
 | Etsy › Plan | Kế hoạch theo product: đọc khối bắt đầu ở **cột Q (17)** của sheet kế hoạch (tab "KH theo Product"), **11 product**: PL2/item, Total Sales, Total PL2, tỷ trọng, Sales/mo, Sales/day, PL2 từng tháng + dòng tổng của sheet. Ô KPI, chart theo tháng. Sheet / cột / số product chọn ở Settings › Plan; dữ liệu là bản Sync gần nhất. |
 | Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc. |
 | System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, sheet kế hoạch (Plan), Test connections, Users (mở khoá / đổi role). |
@@ -20,9 +20,9 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 
 Gọi route internal `/api/v2` bằng **token của chính user**: SSO exchange của POD trả kèm `token`, app lưu mã hoá vào `users.pod_token` mỗi lần đăng nhập. Không có / hết hạn → dùng **token chung dự phòng** (admin dán ở Settings). MCP dùng token của chủ token `rzn_…`.
 
-- `GET /etsy/report?view=…&from=…&to=…&page&per_page&sort_by&sort_order` + filter mảng `shops[] sellers[] designers[] product_types[] teams[]`, text `keyword total_order symbol`.
+- `GET /etsy/report?view=…&from=…&to=…&page&per_page&sort_by&sort_order` + filter mảng `shops[] sellers[] designers[] product_types[] sub_product_types[] teams[]`, text `keyword total_order symbol`.
 - KPI = cộng các dòng view `date` (route `/etsy/report/totals` của trackingis đang trả 500). View `date` trả tối đa 31 ngày/trang nên tự lật trang.
-- Filter dropdown: `/filter/shop?platform=etsy`, `/filter/seller?platform[]=etsy`, `/filter/designers`, `/filter/product-type?platform=etsy`, `/filter/teams`.
+- Filter dropdown: `/filter/shop?platform=etsy`, `/filter/seller?platform[]=etsy`, `/filter/designers`, `/filter/product-type?platform=etsy`, `/filter/sub-product-type?platform=etsy`, `/filter/teams`.
 - Team ZenE: BU `ZenE` id 9; team Etsy 1/2/3.ZenE = 12/13/23. Mặc định lọc theo danh sách ở Settings; `teams=` rỗng = mọi team.
 - Cloudflare chặn User-Agent mặc định của python → client luôn gửi UA `reportzene/…`.
 - Token hết hạn → trackingis trả 401 → app báo "dán token mới ở Settings". Lấy token: web trackingis → avatar → Extension Token (60s) → `POST /api/v2/vault/auth/extension-login`.
@@ -50,7 +50,7 @@ Tool (chỉ đọc): `whoami`, `etsy_totals`, `etsy_report`, `filter_options`, `
 cd backend && uv sync && PYTHONPATH=. uv run python scripts/create_user.py you@example.com "Tên" CODE admin
 uv run uvicorn app.main:app --port 8871        # API + MCP
 cd ../web && npm install && npm run dev        # http://localhost:5177 (proxy → 8871)
-cd ../backend && uv run pytest -q              # 47 test
+cd ../backend && uv run pytest -q              # 48 test
 ```
 
 ## Deploy

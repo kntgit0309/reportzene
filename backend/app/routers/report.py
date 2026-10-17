@@ -11,7 +11,7 @@ from app.models import User
 from app.services import report
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
-OPTION_KINDS = "^(shops|sellers|designers|product_types|teams)$"
+OPTION_KINDS = "^(shops|sellers|designers|product_types|sub_product_types|teams)$"
 
 
 def _params(request: Request) -> dict[str, Any]:

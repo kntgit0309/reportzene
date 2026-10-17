@@ -26,7 +26,8 @@ mcp = MCPServer(
         "Lark report sheets, with the trackingis rights of the token's owner. Dates are YYYY-MM-DD in Vietnam time; leaving them out means this month so far. "
         "Start with etsy_totals for the headline numbers, then etsy_report with a view: date (per day), store, seller, "
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
-        "designer or team name into its id. Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
+        "designer or team name into its id (product types and sub product types are filtered by name). "
+        "Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
         "For the team's own reports call list_sheets, then read_sheet (search with q). Everything here is read-only."
     ),
 )
@@ -72,32 +73,34 @@ def whoami(ctx: Context) -> dict:
     "Headline Etsy sale numbers for a date range: total_order, total_quantity, total (with tax), sale_tax, total_revenue, "
     "avg_order_value, days. Same filters as etsy_report (comma lists of trackingis ids)."))
 def etsy_totals(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
-                product_types: str = "", teams: str | None = None, keyword: str = "") -> dict:
+                product_types: str = "", sub_product_types: str = "", teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers,
-                      product_types=product_types, teams=teams, keyword=keyword)
+                      product_types=product_types, sub_product_types=sub_product_types, teams=teams, keyword=keyword)
     return _run(ctx, lambda db, u: report.etsy_totals(db, params, u))
 
 
 @mcp.tool(description=(
     "Etsy sale report rows, like the trackingis Report Etsy page. view: date | store | seller | product | product_type | order. "
-    "Filters are comma lists of trackingis ids (shops, sellers, designers, teams) or names (product_types); keyword searches "
-    "product names/SKU; total_order + symbol (> >= = <= <) filter by order count. sort_by: date_at, total_order, total_quantity, "
-    "total, total_revenue, sale_tax. Returns rows, paging and the query actually used."))
+    "Filters are comma lists of trackingis ids (shops, sellers, designers, teams) or names (product_types, sub_product_types); "
+    "keyword searches product names/SKU; total_order + symbol (> >= = <= <) filter by order count. "
+    "sort_by: date_at, total_order, total_quantity, total, total_revenue, sale_tax. Returns rows, paging and the query actually used."))
 def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: str = "", page: int = 1, per_page: int = 50,
                 sort_by: str = "", sort_order: str = "desc", shops: str = "", sellers: str = "", designers: str = "",
-                product_types: str = "", teams: str | None = None, keyword: str = "", total_order: str = "", symbol: str = "") -> dict:
+                product_types: str = "", sub_product_types: str = "", teams: str | None = None, keyword: str = "", total_order: str = "",
+                symbol: str = "") -> dict:
     sort = sort_by or ("date_at" if view in ("date", "order") else "total_revenue")
     params = _filters(view=view, date_from=date_from, date_to=date_to, page=page, per_page=min(max(per_page, 1), MAX_ROWS),
                       sort_by=sort, sort_order=sort_order, shops=shops, sellers=sellers, designers=designers,
-                      product_types=product_types, teams=teams, keyword=keyword, total_order=total_order, symbol=symbol)
+                      product_types=product_types, sub_product_types=sub_product_types, teams=teams, keyword=keyword,
+                      total_order=total_order, symbol=symbol)
     return _run(ctx, lambda db, u: report.etsy_report(db, params, u))
 
 
-@mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | teams. "
-                      "query narrows by name (case-insensitive).")
+@mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | "
+                      "sub_product_types | teams. query narrows by name (case-insensitive).")
 def filter_options(ctx: Context, kind: str, query: str = "") -> list[dict]:
-    if kind not in ("shops", "sellers", "designers", "product_types", "teams"):
-        raise AgentError("kind is one of shops, sellers, designers, product_types, teams")
+    if kind not in ("shops", "sellers", "designers", "product_types", "sub_product_types", "teams"):
+        raise AgentError("kind is one of shops, sellers, designers, product_types, sub_product_types, teams")
     needle = query.strip().lower()
 
     def run(db: Session, u: User) -> list[dict]:

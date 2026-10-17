@@ -53,6 +53,7 @@ export type Filters = {
   sellers: number[]
   designers: number[]
   product_types: string[]
+  sub_product_types: string[]
   teams: number[]
   total_order: string
   symbol: string

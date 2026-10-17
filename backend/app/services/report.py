@@ -19,7 +19,7 @@ MAX_RANGE_DAYS = 366
 CACHE_TTL_S = 60  # same filters within a minute reuse the answer (MCP agents and page reloads)
 OPTIONS_TTL_S = 30 * 60
 SYMBOLS = (">", ">=", "=", "<=", "<")
-_ID_RE = re.compile(r"^[\w .&'\-]{1,120}$", re.UNICODE)
+_ID_RE = re.compile(r"^[\w .&'+\-]{1,120}$", re.UNICODE)  # names like "Combo Badge Reel + Buddy"
 _cache: dict[tuple[Any, ...], tuple[float, Any]] = {}
 _lock = threading.Lock()
 

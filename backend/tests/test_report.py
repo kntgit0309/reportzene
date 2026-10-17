@@ -25,6 +25,8 @@ def upstream(monkeypatch):
                 {"id": 12, "name": "Etsy 1.ZenE", "parent_id": 9, "type": "team"}]})
         if req.url.path.endswith("/filter/product-type"):
             return httpx.Response(200, json={"success": True, "data": [{"value": "Shirt", "label": "Shirt"}]})
+        if req.url.path.endswith("/filter/sub-product-type"):
+            return httpx.Response(200, json={"success": True, "data": [{"value": "Combo Badge Reel + Buddy", "label": "Combo Badge Reel + Buddy"}]})
         if q.get("view") == ["date"]:
             page = int(q["page"][0])
             rows = {1: [{"date_at": "2026-10-01", "total_order": 10, "total_quantity": 15, "total": 110.5, "sale_tax": 10.5, "total_revenue": 100.0}],
@@ -62,6 +64,16 @@ def test_report_forwards_view_dates_and_list_filters(client, admin, member, upst
     assert q["view"] == ["store"] and q["from"] == ["2026-10-01"] and q["to"] == ["2026-10-16"]
     assert q["sellers[]"] == ["41", "44"] and q["teams[]"] == ["12", "13"] and q["keyword"] == ["flag"]
     assert upstream[-1].headers["user-agent"].startswith("reportzene/")
+
+
+def test_sub_product_types_options_and_filter(client, admin, member, upstream):
+    _save_token(client, admin)
+    combo = "Combo Badge Reel + Buddy"
+    assert client.get(f"{R}/options/sub_product_types", headers=member).json()["data"] == [{"id": combo, "name": combo}]
+    assert parse_qs(urlparse(str(upstream[-1].url)).query)["platform"] == ["etsy"]
+    res = client.get(R, params={"view": "store", "sub_product_types": f"Felt Ornament,{combo}"}, headers=member)
+    assert res.status_code == 200
+    assert parse_qs(urlparse(str(upstream[-1].url)).query)["sub_product_types[]"] == ["Felt Ornament", combo]
 
 
 def test_empty_teams_param_means_every_team(client, admin, member, upstream):

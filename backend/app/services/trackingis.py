@@ -18,7 +18,7 @@ LIST_FILTERS = ("shops", "sellers", "designers", "product_types", "sub_product_t
 TEXT_FILTERS = ("keyword", "total_order", "symbol", "tm_status", "tm_flagged", "ai_generate", "product_type_level")
 SORT_FIELDS = ("date_at", "total_order", "total_quantity", "total", "total_revenue", "sale_tax")
 FILTER_ROUTES = {"shops": "/filter/shop", "sellers": "/filter/seller", "designers": "/filter/designers",
-                 "product_types": "/filter/product-type", "teams": "/filter/teams"}
+                 "product_types": "/filter/product-type", "sub_product_types": "/filter/sub-product-type", "teams": "/filter/teams"}
 MAX_PER_PAGE = 200
 SUM_FIELDS = ("total_order", "total_quantity", "total", "sale_tax", "total_revenue")
 MAX_TOTAL_PAGES = 13  # 13 × 31 days ≈ a year; the API caps a date page at 31 days
@@ -121,10 +121,10 @@ class TrackingisClient:
         return out
 
     def options(self, kind: str) -> list[dict[str, Any]]:
-        """Filter dropdown values: shops, sellers, designers, product_types, teams."""
+        """Filter dropdown values: shops, sellers, designers, product_types, sub_product_types, teams."""
         if kind not in FILTER_ROUTES:
             raise TrackingisError(f"Unknown filter {kind}", 422)
-        params = {"platform": "etsy"} if kind in ("shops", "product_types") else {}
+        params = {"platform": "etsy"} if kind in ("shops", "product_types", "sub_product_types") else {}
         if kind == "sellers":
             params = {"platform[]": "etsy"}
         data = self._get(FILTER_ROUTES[kind], params).get("data")

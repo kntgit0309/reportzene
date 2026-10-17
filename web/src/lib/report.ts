@@ -44,14 +44,14 @@ export function shortcuts() {
 export function emptyFilters(): Filters {
   const t = vnToday()
   return { dateRange: [ymd(new Date(t.getFullYear(), t.getMonth(), 1)), ymd(t)], keyword: '', shops: [], sellers: [], designers: [],
-    product_types: [], teams: [], total_order: '', symbol: '>=' }
+    product_types: [], sub_product_types: [], teams: [], total_order: '', symbol: '>=' }
 }
 
 /** Filters → query params. `teamsTouched` false = let the server apply the ZenE teams from Settings. */
 export function filterParams(f: Filters, teamsTouched: boolean): Record<string, string> {
   const p: Record<string, string> = { date_from: f.dateRange[0], date_to: f.dateRange[1] }
   if (f.keyword.trim()) p.keyword = f.keyword.trim()
-  for (const k of ['shops', 'sellers', 'designers', 'product_types'] as const) if (f[k].length) p[k] = f[k].join(',')
+  for (const k of ['shops', 'sellers', 'designers', 'product_types', 'sub_product_types'] as const) if (f[k].length) p[k] = f[k].join(',')
   if (teamsTouched) p.teams = f.teams.join(',')
   if (f.total_order) { p.total_order = f.total_order; p.symbol = f.symbol || '=' }
   return p
