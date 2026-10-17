@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataLine, Document, Expand, Fold, Setting } from '@element-plus/icons-vue'
+import { Aim, DataLine, Document, Expand, Fold, Setting } from '@element-plus/icons-vue'
 import AgentTokens from '../components/AgentTokens.vue'
 import { auth } from '../lib/auth'
 
@@ -14,7 +14,7 @@ const tokensOpen = ref(false)
 
 // Same grouping as the trackingis sidebar: a small group title, then its pages
 const GROUPS = [
-  { title: 'Etsy', items: [{ path: '/etsy/report', title: 'Report', icon: DataLine }] },
+  { title: 'Etsy', items: [{ path: '/etsy/report', title: 'Report', icon: DataLine }, { path: '/etsy/plan', title: 'Plan', icon: Aim }] },
   { title: 'Lark', items: [{ path: '/sheets', title: 'Team sheets', icon: Document }] },
   { title: 'System', adminOnly: true, items: [{ path: '/settings', title: 'Settings', icon: Setting }] },
 ]

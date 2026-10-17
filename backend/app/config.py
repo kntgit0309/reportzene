@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     lark_app_secret: str = ""
     lark_base_url: str = "https://open.larksuite.com"
     sheet_max_rows: int = 5000
+    # Etsy › Plan: the plan-by-product block of a team sheet (sheet picked in Settings; column and count editable there)
+    plan_start_column: int = 17  # column Q of the "KH theo Product" tab
+    plan_products: int = 11
 
     # First admin, created on startup when the users table is empty
     bootstrap_email: str = ""

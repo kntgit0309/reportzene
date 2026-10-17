@@ -12,8 +12,9 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 | Trang | Nội dung |
 |---|---|
 | Etsy › Report | 6 view giống trang Report Etsy của trackingis: Date (mở ra từng store), Order, Product, Store (mở ra từng ngày), Seller, Product type. Filter ngày, keyword, store, seller, designer, product type, team, total order. Ô KPI: revenue, orders, quantity, AOV, total, sale tax. Chart + export CSV. |
+| Etsy › Plan | Kế hoạch theo product: đọc khối bắt đầu ở **cột Q (17)** của sheet kế hoạch (tab "KH theo Product"), **11 product**: PL2/item, Total Sales, Total PL2, tỷ trọng, Sales/mo, Sales/day, PL2 từng tháng + dòng tổng của sheet. Ô KPI, chart theo tháng. Sheet / cột / số product chọn ở Settings › Plan; dữ liệu là bản Sync gần nhất. |
 | Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc. |
-| System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, Test connections, Users (mở khoá / đổi role). |
+| System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, sheet kế hoạch (Plan), Test connections, Users (mở khoá / đổi role). |
 
 ## Nguồn dữ liệu trackingis
 
@@ -49,7 +50,7 @@ Tool (chỉ đọc): `whoami`, `etsy_totals`, `etsy_report`, `filter_options`, `
 cd backend && uv sync && PYTHONPATH=. uv run python scripts/create_user.py you@example.com "Tên" CODE admin
 uv run uvicorn app.main:app --port 8871        # API + MCP
 cd ../web && npm install && npm run dev        # http://localhost:5177 (proxy → 8871)
-cd ../backend && uv run pytest -q              # 42 test
+cd ../backend && uv run pytest -q              # 47 test
 ```
 
 ## Deploy

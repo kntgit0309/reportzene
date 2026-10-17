@@ -34,6 +34,9 @@ class SettingsIn(BaseModel):
     default_teams: list[str] | None = Field(default=None, max_length=50)
     lark_app_id: str | None = Field(default=None, max_length=100)
     lark_app_secret: str | None = Field(default="", max_length=200)
+    plan_sheet_id: int | None = Field(default=None, ge=0)  # 0 = no plan sheet
+    plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
+    plan_products: int | None = Field(default=None, ge=1, le=100)
 
 
 LARK_URL = r"^https://[A-Za-z0-9.\-]+\.(larksuite|feishu)\.(com|cn)/"
