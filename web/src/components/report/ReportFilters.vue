@@ -10,7 +10,7 @@ const props = defineProps<{ defaultTeams: string[] }>()
 const emit = defineEmits<{ apply: []; reset: [] }>()
 
 const advanced = ref(false)
-const opts = ref<Record<string, Option[]>>({ shops: [], sellers: [], designers: [], product_types: [], teams: [] })
+const opts = ref<Record<string, Option[]>>({ shops: [], sellers: [], designers: [], product_types: [], sub_product_types: [], teams: [] })
 const loadingOpts = ref(false)
 const optionError = ref('')
 
@@ -39,7 +39,8 @@ const chips = computed(() => {
   const name = (kind: string, id: number | string) => opts.value[kind].find((o) => String(o.id) === String(id))?.name ?? String(id)
   const out: string[] = []
   if (f.keyword) out.push(`Keyword: ${f.keyword}`)
-  for (const [k, label] of [['shops', 'Store'], ['sellers', 'Seller'], ['designers', 'Designer'], ['product_types', 'Type']] as const) {
+  for (const [k, label] of [['shops', 'Store'], ['sellers', 'Seller'], ['designers', 'Designer'], ['product_types', 'Type'],
+    ['sub_product_types', 'Sub type']] as const) {
     if (f[k].length) out.push(`${label}: ${f[k].map((id) => name(k, id)).join(', ')}`)
   }
   if (teamsModel.value.length) out.push(`Team: ${teamsModel.value.map((id) => name('teams', id)).join(', ')}`)
@@ -80,6 +81,11 @@ const chips = computed(() => {
         <el-form-item label="Product type">
           <el-select v-model="filters.product_types" multiple filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="2" placeholder="All types" class="w-full">
             <el-option v-for="o in opts.product_types" :key="o.id" :label="o.name" :value="o.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Sub product type">
+          <el-select v-model="filters.sub_product_types" multiple filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="2" placeholder="All sub types" class="w-full">
+            <el-option v-for="o in opts.sub_product_types" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="Team">
