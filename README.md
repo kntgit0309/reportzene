@@ -28,8 +28,8 @@ Gọi route internal `/api/v2` bằng **1 token dịch vụ** (Bearer, tài kho�
 
 ## Đăng nhập
 
-- **SSO POD** (Sign in with Isuccess System) dùng chung app SSO của MBA. App MBA trên POD phải có redirect
-  `https://reportzene.trackingis.info/auth/pod/callback`.
+- **SSO POD** (Sign in with Isuccess System): app SSO **riêng** của ReportZenE (key `3wsqtk6scx8p6sne`, tạo 17/10/2026),
+  redirect `https://reportzene.trackingis.info/auth/pod/callback`. Secret chỉ nằm trong plist launchd.
 - Dữ liệu doanh số nên SSO lần đầu tạo user **bị khoá**, trừ email trong `POD_ALLOWED_USERS` (plist launchd). Admin mở khoá ở Settings › Users.
 - Admin mật khẩu dự phòng: tạo lần deploy đầu, mật khẩu ở `~/reportzene/.admin-password` trên server.
 
@@ -55,7 +55,7 @@ cd ../backend && uv run pytest -q              # 42 test
 ## Deploy
 
 `bash deploy/deploy.sh` → test + build → rsync lên macminiwork `~/reportzene` → launchd `online.kntmcptools.reportzene`,
-uvicorn `100.96.215.29:8870`. Key/secret SSO lần đầu chép server→server từ plist TM Check ACO (cùng app MBA), các lần sau giữ trong plist.
+uvicorn `100.96.215.29:8870`. Key/secret SSO được giữ trong plist qua mỗi lần deploy (đổi: `POD_APP_KEY=… POD_APP_SECRET=… bash deploy/deploy.sh`).
 
 Tunnel: ingress `reportzene.trackingis.info → http://100.96.215.29:8870` trong `~/.cloudflared/mba-system.yml` (backup `.bak-reportzene-*`),
 CNAME tạo bằng `cloudflared tunnel route dns mba-system reportzene.trackingis.info`. Restart tunnel = MBA gián đoạn vài giây.

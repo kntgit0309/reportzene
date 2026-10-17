@@ -9,8 +9,8 @@
 #   public : https://reportzene.trackingis.info qua tunnel cloudflared "mba-system" (chung MBA)
 #   admin đầu tiên: tạo 1 lần, mật khẩu ngẫu nhiên ở ~/reportzene/.admin-password
 #   token trackingis + Lark app: nhập trong web (Settings), lưu mã hoá trong DB bằng data/secret.key.
-#   SSO POD: dùng chung app của MBA. Key/secret chỉ nằm trong plist launchd (chmod 600); lần đầu tự chép
-#   server→server từ plist của TM Check ACO (cùng app MBA), hoặc truyền POD_APP_KEY=... POD_APP_SECRET=...
+#   SSO POD: app riêng ReportZenE (17/10/2026). Key/secret chỉ nằm trong plist launchd (chmod 600), deploy sau tự giữ;
+#   đổi app: POD_APP_KEY=... POD_APP_SECRET=... bash deploy/deploy.sh (plist trống thì mới lấy tạm từ plist TM Check ACO)
 set -euo pipefail
 
 HOST=macminiwork
