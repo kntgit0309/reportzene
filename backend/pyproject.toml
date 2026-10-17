@@ -1,0 +1,31 @@
+[project]
+name = "reportzene"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "sqlalchemy>=2.0",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "httpx>=0.28.1",
+  "python-multipart>=0.0.9",
+  "cryptography>=43",
+  "mcp>=2.3.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+extend-ignore = [
+  "B008",  # FastAPI Depends/Query/File defaults are idiomatic
+]

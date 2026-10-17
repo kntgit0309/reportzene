@@ -1,0 +1,111 @@
+"""Runtime settings saved from the Settings page: trackingis token + Lark app (secrets encrypted at rest), ZenE teams."""
+import base64
+import hashlib
+import os
+from dataclasses import dataclass
+from typing import Any
+
+from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy.orm import Session
+
+from app.config import BASE_DIR, settings
+from app.models import AppSetting
+
+KEY = "runtime"
+SECRET_FIELDS = ("trackingis_token", "lark_app_secret")
+PLAIN_FIELDS = ("lark_app_id",)
+LIST_FIELDS = ("default_teams",)
+SECRET_FILE = BASE_DIR / "data" / "secret.key"
+
+
+@dataclass(frozen=True)
+class Runtime:
+    trackingis_token: str
+    default_teams: list[str]
+    lark_app_id: str = ""
+    lark_app_secret: str = ""
+
+    @property
+    def trackingis_ready(self) -> bool:
+        return bool(self.trackingis_token)
+
+    @property
+    def lark_ready(self) -> bool:
+        return bool(self.lark_app_id and self.lark_app_secret)
+
+
+def _secret() -> bytes:
+    """SECRET_KEY from the environment, else a random key kept in data/secret.key (created once, chmod 600)."""
+    if settings.secret_key:
+        return settings.secret_key.encode()
+    if not SECRET_FILE.exists():
+        SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(SECRET_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(base64.urlsafe_b64encode(os.urandom(32)).decode())
+    return SECRET_FILE.read_text().strip().encode()
+
+
+def _fernet() -> Fernet:
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(_secret()).digest()))
+
+
+def _stored(db: Session) -> dict[str, Any]:
+    row = db.get(AppSetting, KEY)
+    return dict(row.value) if row else {}
+
+
+def _decrypt(token: str | None) -> str:
+    if not token:
+        return ""
+    try:
+        return _fernet().decrypt(token.encode()).decode()
+    except InvalidToken:  # secret key changed: the saved value is unusable, Settings shows it as missing
+        return ""
+
+
+def _split(value: str | list[str] | None) -> list[str]:
+    items = value if isinstance(value, list) else (value or "").split(",")
+    return [str(i).strip() for i in items if str(i).strip()]
+
+
+def runtime(db: Session) -> Runtime:
+    s = _stored(db)
+    return Runtime(
+        trackingis_token=_decrypt(s.get("trackingis_token")) or settings.trackingis_token,
+        default_teams=_split(s.get("default_teams") if "default_teams" in s else settings.default_teams),
+        lark_app_id=s.get("lark_app_id") or settings.lark_app_id,
+        lark_app_secret=_decrypt(s.get("lark_app_secret")) or settings.lark_app_secret,
+    )
+
+
+def _hint(value: str) -> str:
+    return f"{value[:4]}…{value[-4:]}" if len(value) > 12 else ("saved" if value else "")
+
+
+def status(db: Session) -> dict[str, Any]:
+    rt = runtime(db)
+    return {"trackingis_token": _hint(rt.trackingis_token), "trackingis_url": settings.trackingis_url,
+            "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret)}
+
+
+def save(db: Session, changes: dict[str, Any]) -> None:
+    """Secret fields: "" keeps the saved value, None removes it. Plain/list fields: None keeps."""
+    value = _stored(db)
+    for f in SECRET_FIELDS:
+        new = changes.get(f, "")
+        if new is None:
+            value.pop(f, None)
+        elif new.strip():
+            value[f] = _fernet().encrypt(new.strip().encode()).decode()
+    for f in PLAIN_FIELDS:
+        if changes.get(f) is not None:
+            value[f] = changes[f].strip()
+    for f in LIST_FIELDS:
+        if changes.get(f) is not None:
+            value[f] = _split(changes[f])
+    row = db.get(AppSetting, KEY)
+    if row is None:
+        db.add(AppSetting(key=KEY, value=value))
+    else:
+        row.value = value

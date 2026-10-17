@@ -1,0 +1,61 @@
+# ReportZenE
+
+Web app + MCP đọc **báo cáo sale Etsy của ZenE** từ `production.trackingis.info` và các **Lark Sheet báo cáo tay** của team.
+Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / System).
+
+- Public: https://reportzene.trackingis.info (tunnel cloudflared `mba-system`, chung MBA)
+- MCP cho agent: `https://reportzene.trackingis.info/mcp` (token cá nhân `rzn_…`)
+- Stack: FastAPI + SQLite + Vue 3 / Element Plus / Highcharts (khung copy từ TM Check ACO)
+
+## Chức năng
+
+| Trang | Nội dung |
+|---|---|
+| Etsy › Report | 6 view giống trang Report Etsy của trackingis: Date (mở ra từng store), Order, Product, Store (mở ra từng ngày), Seller, Product type. Filter ngày, keyword, store, seller, designer, product type, team, total order. Ô KPI: revenue, orders, quantity, AOV, total, sale tax. Chart + export CSV. |
+| Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc. |
+| System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, Test connections, Users (mở khoá / đổi role). |
+
+## Nguồn dữ liệu trackingis
+
+Gọi route internal `/api/v2` bằng **1 token dịch vụ** (Bearer, tài khoản có quyền `view_report`), admin dán ở Settings:
+
+- `GET /etsy/report?view=…&from=…&to=…&page&per_page&sort_by&sort_order` + filter mảng `shops[] sellers[] designers[] product_types[] teams[]`, text `keyword total_order symbol`.
+- KPI = cộng các dòng view `date` (route `/etsy/report/totals` của trackingis đang trả 500). View `date` trả tối đa 31 ngày/trang nên tự lật trang.
+- Filter dropdown: `/filter/shop?platform=etsy`, `/filter/seller?platform[]=etsy`, `/filter/designers`, `/filter/product-type?platform=etsy`, `/filter/teams`.
+- Team ZenE: BU `ZenE` id 9; team Etsy 1/2/3.ZenE = 12/13/23. Mặc định lọc theo danh sách ở Settings; `teams=` rỗng = mọi team.
+- Cloudflare chặn User-Agent mặc định của python → client luôn gửi UA `reportzene/…`.
+- Token hết hạn → trackingis trả 401 → app báo "dán token mới ở Settings". Lấy token: web trackingis → avatar → Extension Token (60s) → `POST /api/v2/vault/auth/extension-login`.
+
+## Đăng nhập
+
+- **SSO POD** (Sign in with Isuccess System) dùng chung app SSO của MBA. App MBA trên POD phải có redirect
+  `https://reportzene.trackingis.info/auth/pod/callback`.
+- Dữ liệu doanh số nên SSO lần đầu tạo user **bị khoá**, trừ email trong `POD_ALLOWED_USERS` (plist launchd). Admin mở khoá ở Settings › Users.
+- Admin mật khẩu dự phòng: tạo lần deploy đầu, mật khẩu ở `~/reportzene/.admin-password` trên server.
+
+## MCP
+
+Menu avatar → *Agent tokens (MCP)* → tạo token, rồi:
+
+```bash
+claude mcp add --scope user --transport http reportzene https://reportzene.trackingis.info/mcp --header "Authorization: Bearer rzn_…"
+```
+
+Tool (chỉ đọc): `whoami`, `etsy_totals`, `etsy_report`, `filter_options`, `list_sheets`, `read_sheet`, `sync_sheet`.
+
+## Chạy local
+
+```bash
+cd backend && uv sync && PYTHONPATH=. uv run python scripts/create_user.py you@example.com "Tên" CODE admin
+uv run uvicorn app.main:app --port 8871        # API + MCP
+cd ../web && npm install && npm run dev        # http://localhost:5177 (proxy → 8871)
+cd ../backend && uv run pytest -q              # 42 test
+```
+
+## Deploy
+
+`bash deploy/deploy.sh` → test + build → rsync lên macminiwork `~/reportzene` → launchd `online.kntmcptools.reportzene`,
+uvicorn `100.96.215.29:8870`. Key/secret SSO lần đầu chép server→server từ plist TM Check ACO (cùng app MBA), các lần sau giữ trong plist.
+
+Tunnel: ingress `reportzene.trackingis.info → http://100.96.215.29:8870` trong `~/.cloudflared/mba-system.yml` (backup `.bak-reportzene-*`),
+CNAME tạo bằng `cloudflared tunnel route dns mba-system reportzene.trackingis.info`. Restart tunnel = MBA gián đoạn vài giây.
