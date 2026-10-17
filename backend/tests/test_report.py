@@ -103,3 +103,33 @@ def test_settings_are_admin_only_and_never_echo_the_token(client, admin, member,
     _save_token(client, admin, token="3574|abcdefghijklmnop")
     s = client.get("/api/v1/settings", headers=admin).json()["data"]
     assert s["trackingis_token"] == "3574…mnop" and "abcdefghijk" not in str(s)
+
+
+def test_sso_user_reads_with_own_token_then_falls_back_to_shared(client, db_factory, monkeypatch, upstream):
+    """Sign-in with Isuccess System hands over the user's trackingis token: no token to paste for them."""
+    from app.config import settings
+    from app.services.pod_sso import PodProfile
+    from tests.test_pod_sso import _callback, _start
+    monkeypatch.setattr(settings, "pod_app_key", "k")
+    monkeypatch.setattr(settings, "pod_app_secret", "s")
+    monkeypatch.setattr(settings, "pod_redirect_url", "https://r.test/auth/pod/callback")
+    monkeypatch.setattr(settings, "pod_allowed_users", "tien@pod.test")
+    tien = PodProfile(user_id=46, name="Tiên LTC", email="tien@pod.test", avatar_url=None, token="tis-token")
+    _callback(client, monkeypatch, tien, _start(client, "/etsy/report"))
+    assert client.get("/api/v1/auth/me").json()["data"]["pod_connected"] is True
+    res = client.get(f"{R}?view=store")
+    assert res.status_code == 200 and upstream[-1].headers["authorization"] == "Bearer tis-token"
+
+    # Her token expires: the shared token (none yet) cannot help → clear message; once an admin saves one, it is used
+    with db_factory() as s:
+        from app.models import User
+        from app.services import settings_store
+        u = s.query(User).filter_by(pod_user_id=46).one()
+        u.pod_token = settings_store.encrypt("expired")
+        settings_store.save(s, {"trackingis_token": "tis-token"})
+        s.commit()
+    from app.services import report
+    report.clear_cache()
+    res = client.get(f"{R}?view=seller")
+    assert res.status_code == 200
+    assert [r.headers["authorization"] for r in upstream[-2:]] == ["Bearer expired", "Bearer tis-token"]

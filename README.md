@@ -17,7 +17,7 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 
 ## Nguồn dữ liệu trackingis
 
-Gọi route internal `/api/v2` bằng **1 token dịch vụ** (Bearer, tài khoản có quyền `view_report`), admin dán ở Settings:
+Gọi route internal `/api/v2` bằng **token của chính user**: SSO exchange của POD trả kèm `token`, app lưu mã hoá vào `users.pod_token` mỗi lần đăng nhập. Không có / hết hạn → dùng **token chung dự phòng** (admin dán ở Settings). MCP dùng token của chủ token `rzn_…`.
 
 - `GET /etsy/report?view=…&from=…&to=…&page&per_page&sort_by&sort_order` + filter mảng `shops[] sellers[] designers[] product_types[] teams[]`, text `keyword total_order symbol`.
 - KPI = cộng các dòng view `date` (route `/etsy/report/totals` của trackingis đang trả 500). View `date` trả tối đa 31 ngày/trang nên tự lật trang.

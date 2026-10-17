@@ -64,6 +64,14 @@ def _decrypt(token: str | None) -> str:
         return ""
 
 
+def encrypt(value: str) -> str:
+    return _fernet().encrypt(value.encode()).decode()
+
+
+def decrypt(token: str | None) -> str:
+    return _decrypt(token)
+
+
 def _split(value: str | list[str] | None) -> list[str]:
     items = value if isinstance(value, list) else (value or "").split(",")
     return [str(i).strip() for i in items if str(i).strip()]

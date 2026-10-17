@@ -23,7 +23,7 @@ mcp = MCPServer(
     name="reportzene",
     instructions=(
         "ReportZenE reads ZenE's Etsy sale report from trackingis (production.trackingis.info) and the team's hand-filled "
-        "Lark report sheets. Dates are YYYY-MM-DD in Vietnam time; leaving them out means this month so far. "
+        "Lark report sheets, with the trackingis rights of the token's owner. Dates are YYYY-MM-DD in Vietnam time; leaving them out means this month so far. "
         "Start with etsy_totals for the headline numbers, then etsy_report with a view: date (per day), store, seller, "
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
         "designer or team name into its id. Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
@@ -75,7 +75,7 @@ def etsy_totals(ctx: Context, date_from: str = "", date_to: str = "", shops: str
                 product_types: str = "", teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers,
                       product_types=product_types, teams=teams, keyword=keyword)
-    return _run(ctx, lambda db, u: report.etsy_totals(db, params))
+    return _run(ctx, lambda db, u: report.etsy_totals(db, params, u))
 
 
 @mcp.tool(description=(
@@ -90,7 +90,7 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
     params = _filters(view=view, date_from=date_from, date_to=date_to, page=page, per_page=min(max(per_page, 1), MAX_ROWS),
                       sort_by=sort, sort_order=sort_order, shops=shops, sellers=sellers, designers=designers,
                       product_types=product_types, teams=teams, keyword=keyword, total_order=total_order, symbol=symbol)
-    return _run(ctx, lambda db, u: report.etsy_report(db, params))
+    return _run(ctx, lambda db, u: report.etsy_report(db, params, u))
 
 
 @mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | teams. "
@@ -100,8 +100,8 @@ def filter_options(ctx: Context, kind: str, query: str = "") -> list[dict]:
         raise AgentError("kind is one of shops, sellers, designers, product_types, teams")
     needle = query.strip().lower()
 
-    def run(db: Session, _u: User) -> list[dict]:
-        rows = report.filter_options(db, kind)
+    def run(db: Session, u: User) -> list[dict]:
+        rows = report.filter_options(db, kind, u)
         return [r for r in rows if needle in str(r["name"]).lower()] if needle else rows
     return _run(ctx, run)
 

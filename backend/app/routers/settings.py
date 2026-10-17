@@ -2,6 +2,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("")
 def get_settings(request: Request, db: Session = Depends(get_db), _: User = Depends(admin)) -> dict[str, Any]:
-    return ok(settings_store.status(db), request)
+    connected = db.scalar(select(func.count(User.id)).where(User.pod_token.is_not(None)))
+    return ok({**settings_store.status(db), "users_with_sso_token": connected}, request)
 
 
 @router.put("")

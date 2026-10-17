@@ -113,7 +113,7 @@ def test_exchange_parses_pod_response(monkeypatch):
         return httpx.Response(200, json={"success": True, "data": {"token": "t", "user": {"id": 7, "name": "Lan", "email": "LAN@X.TEST"}}})
 
     monkeypatch.setattr(pod_sso, "_client", lambda: httpx.Client(base_url="https://pod.test", transport=httpx.MockTransport(handler)))
-    assert pod_sso.exchange("code") == PodProfile(user_id=7, name="Lan", email="lan@x.test", avatar_url=None)
+    assert pod_sso.exchange("code") == PodProfile(user_id=7, name="Lan", email="lan@x.test", avatar_url=None, token="t")
 
 
 def test_exchange_rejected(monkeypatch):

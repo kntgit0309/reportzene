@@ -13,7 +13,7 @@
 #   đổi app: POD_APP_KEY=... POD_APP_SECRET=... bash deploy/deploy.sh (plist trống thì mới lấy tạm từ plist TM Check ACO)
 set -euo pipefail
 
-HOST=macminiwork
+HOST="${HOST:-macminiwork}"   # Cloudflare SSH down? HOST=designertwo@100.96.215.29 (Tailscale)
 BIND_IP=100.96.215.29
 PORT=8870
 LABEL=online.kntmcptools.reportzene

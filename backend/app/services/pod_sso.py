@@ -28,6 +28,7 @@ class PodProfile:
     name: str | None
     email: str | None
     avatar_url: str | None
+    token: str | None = None  # the user's trackingis API token from the exchange: reads the reports with their own rights
 
 
 def _client() -> httpx.Client:
@@ -49,6 +50,7 @@ def _parse(data: dict[str, Any]) -> PodProfile:
         name=(user.get("name") or "").strip() or None,
         email=(user.get("email") or "").strip().lower() or None,
         avatar_url=user.get("url_avatar"),
+        token=str(data.get("token") or "").strip() or None,
     )
 
 

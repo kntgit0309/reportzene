@@ -29,9 +29,10 @@ USER_AGENT = "reportzene/0.1 (+https://reportzene.trackingis.info)"  # Cloudflar
 class TrackingisError(Exception):
     """Readable error for the UI / MCP (missing token, expired token, upstream down)."""
 
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, auth_failed: bool = False):
         super().__init__(message)
         self.status = status
+        self.auth_failed = auth_failed  # trackingis refused this token (401/403): another token may still work
 
 
 @dataclass(frozen=True)
@@ -77,9 +78,9 @@ class TrackingisClient:
             log.warning("trackingis unreachable on %s: %s", path, exc)
             raise TrackingisError(f"Cannot reach trackingis: {str(exc)[:120]}") from exc
         if res.status_code == 401:
-            raise TrackingisError("trackingis refused the token (expired or revoked): an admin pastes a new one in Settings", 502)
+            raise TrackingisError("trackingis refused the token (expired or revoked): sign in again, or an admin pastes a new shared token in Settings", 502, True)
         if res.status_code == 403:
-            raise TrackingisError("The trackingis token has no permission for this report (needs view_report)", 502)
+            raise TrackingisError("This trackingis account has no permission for this report (needs view_report)", 502, True)
         if res.status_code >= 400:
             log.warning("trackingis %s on %s: %s", res.status_code, path, res.text[:300])
             raise TrackingisError(f"trackingis error {res.status_code}")

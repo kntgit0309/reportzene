@@ -39,7 +39,8 @@ _fails: dict[str, deque[float]] = defaultdict(deque)
 
 def user_out(u: User) -> dict[str, Any]:
     return {"id": u.id, "email": u.email, "name": u.name, "code": u.code, "role": u.role, "is_active": u.is_active,
-            "avatar_url": u.avatar_url, "is_pod": u.pod_user_id is not None}
+            "avatar_url": u.avatar_url, "is_pod": u.pod_user_id is not None, "pod_connected": bool(u.pod_token),
+            "pod_token_at": u.pod_token_at.isoformat() if u.pod_token_at else None}
 
 
 def _start_session(db: Session, user: User, response: Response) -> None:

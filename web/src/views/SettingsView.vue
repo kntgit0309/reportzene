@@ -7,7 +7,7 @@ import { api } from '../lib/api'
 import { fetchOptions } from '../lib/report'
 import type { Option } from '../lib/types'
 
-type Status = { trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string }
+type Status = { trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number }
 type Check = { ok: boolean; message: string }
 
 const tab = ref('connections')
@@ -57,9 +57,11 @@ async function save() {
       <el-tab-pane label="Connections" name="connections">
         <el-form v-if="status" label-position="top" class="max-w-2xl" @submit.prevent="save">
           <h3 class="card-title">trackingis</h3>
-          <el-form-item :label="`Service token ${status.trackingis_token ? '(saved: ' + status.trackingis_token + ')' : '(not set, required)'}`">
+          <el-alert type="info" :closable="false" show-icon class="!mb-4"
+                    :title="`Signing in with Isuccess System connects each user to trackingis with their own rights — no token to paste (${status.users_with_sso_token ?? 0} users connected).`" />
+          <el-form-item :label="`Shared token (fallback) ${status.trackingis_token ? '(saved: ' + status.trackingis_token + ')' : '(not set)'}`">
             <el-input v-model="form.trackingis_token" type="password" show-password autocomplete="off" placeholder="Leave blank to keep the saved token" />
-            <div class="text-xs text-muted">Bearer token of an account with the <code>view_report</code> permission on {{ status.trackingis_url }} (avatar → Extension Token → extension-login). Stored encrypted.</div>
+            <div class="text-xs text-muted">Used when a user has no SSO token (password sign-in) or theirs expired. Bearer token of an account with <code>view_report</code> on {{ status.trackingis_url }}. Stored encrypted.</div>
           </el-form-item>
           <el-form-item label="Default teams (ZenE)">
             <el-select v-model="form.default_teams" multiple filterable clearable placeholder="Every team" class="w-full">

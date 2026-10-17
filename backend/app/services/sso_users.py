@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import NO_PASSWORD, User
+from app.models.base import utcnow
+from app.services import settings_store
 from app.services.naming import clean_code
 from app.services.pod_sso import PodProfile
 
@@ -69,5 +71,7 @@ def upsert_from_pod(db: Session, p: PodProfile) -> User:
     if p.name:
         user.name = p.name
     user.avatar_url = p.avatar_url
+    if p.token:  # each sign-in refreshes it, so an expired token heals on the next login
+        user.pod_token, user.pod_token_at = settings_store.encrypt(p.token), utcnow()
     db.flush()
     return user

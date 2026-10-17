@@ -23,6 +23,9 @@ class User(Base):
     # POD SSO identity: pod_user_id is the stable key (email may change)
     pod_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     avatar_url: Mapped[str | None] = mapped_column(Text)
+    # trackingis token handed over by the last SSO sign-in, encrypted (settings_store.encrypt); None = use the shared token
+    pod_token: Mapped[str | None] = mapped_column(Text)
+    pod_token_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     @property
     def is_admin(self) -> bool:
