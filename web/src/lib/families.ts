@@ -1,7 +1,7 @@
 // Product families with their own Etsy page; their product types live in the backend (app/services/families.py).
 // Adding one: an entry here (the route, the Etsy menu item and its Settings › Plan picker follow) and one in the backend.
 import type { Component } from 'vue'
-import { Flag, Present } from '@element-plus/icons-vue'
+import { Box, Flag, Postcard, Present } from '@element-plus/icons-vue'
 import BlanketIcon from '../components/icons/BlanketIcon.vue'
 import ShirtIcon from '../components/icons/ShirtIcon.vue'
 import type { FamilyKey } from './types'
@@ -53,6 +53,24 @@ export const FAMILIES: Record<FamilyKey, Family> = {
     accountParts: 'Sub product type',
     accountsNote: 'a store opens onto its sub product types, actuals only (the plan is for Flag as a whole). Actual: trackingis, '
       + 'flag sub product types only.',
+  },
+  wooden_block: {
+    key: 'wooden_block', name: 'Wooden Block', plural: 'wooden blocks', icon: Box,
+    groupsNote: 'Wooden Block groups the trackingis sub product types listed under it.',
+    planNote: 'KH Wooden Block has one value per month, for Wooden Block as a whole.',
+    planSheetHint: 'The "KH Wooden Block" tab: a "Shop Name | Team | … | MM-YYYY" header row, one column per month (no categories), in pieces.',
+    accountParts: 'Sub product type',
+    accountsNote: 'a store opens onto its sub product types, actuals only (the plan is for Wooden Block as a whole). Actual: '
+      + 'trackingis, wooden block sub product types only.',
+  },
+  badge_reel: {
+    key: 'badge_reel', name: 'Badge Reel', plural: 'badge reels', icon: Postcard,
+    groupsNote: 'Badge Reel groups the trackingis sub product types listed under it.',
+    planNote: 'KH Badge Reel has one Total per month, for Badge Reel as a whole.',
+    planSheetHint: 'The "KH Badge Reel" tab: same layout as KH Flag, a "Total" column per month (no categories), in pieces.',
+    accountParts: 'Sub product type',
+    accountsNote: 'a store opens onto its sub product types, actuals only (the plan is for Badge Reel as a whole). Actual: '
+      + 'trackingis, badge reel sub product types only.',
   },
 }
 export const FAMILY_LIST = Object.values(FAMILIES)

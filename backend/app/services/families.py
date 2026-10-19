@@ -1,5 +1,6 @@
-"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag): the team's grouping of trackingis sub
-product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt, KH Blanket, KH Flag) maps onto it.
+"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel): the team's
+grouping of trackingis sub product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt…) maps
+onto it.
 Adding a family: an entry here and in web/src/lib/families.ts; its plan sheet is picked in Settings › Plan."""
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -86,4 +87,23 @@ FLAG = Family(
     plan_note="the plan has one Total per month, for Flag as a whole",
 )
 
-FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG)}
+# One product type each, like Flag; their KH sheets have one value per month and no categories
+WOODEN_BLOCK = Family(
+    key="wooden_block",
+    name="Wooden Block",
+    groups=(("Wooden Block", ("3D Wooden Block", "Wooden Block")),),
+    plan_groups={},
+    plan_other="Wooden Block",
+    plan_note="the plan has one value per month, for Wooden Block as a whole",
+)
+BADGE_REEL = Family(
+    key="badge_reel",
+    name="Badge Reel",
+    groups=(("Badge Reel", ("badge reel", "shaker badge reel", "Badge Reel 2-layers", "Badge Buddy", "Combo Badge Reel + Buddy",
+                            "ID Badge Holder")),),
+    plan_groups={},
+    plan_other="Badge Reel",
+    plan_note="the plan has one Total per month, for Badge Reel as a whole",
+)
+
+FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG, WOODEN_BLOCK, BADGE_REEL)}
