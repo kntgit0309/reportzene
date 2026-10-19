@@ -71,7 +71,7 @@ const kpis = computed(() => {
     ...(hasCf.value ? [
       { label: 'PL2 CF (actual)', value: money(t?.cf), color: gapColor(t?.cf), hint: `PROFIT THỰC ĐẠT, ${cfMonths.value || 'months of the range'}` },
     ] : []),
-    ...(hasKt.value && hasCf.value ? [{ label: 'KT − CF', value: signedMoney(t?.kt_minus_cf) || '—', hint: 'PL2 KT − PL2 CF' }] : []),
+    ...(hasKt.value && hasCf.value ? [{ label: 'CF − KT', value: signedMoney(t?.cf_minus_kt) || '—', color: gapColor(t?.cf_minus_kt), hint: 'PL2 CF − PL2 KT' }] : []),
   ]
 })
 const rowClass = ({ row }: { row: Row }) => (row.children ? 'row-parent' : row.key.startsWith('_others/') ? 'row-child' : '')
@@ -80,15 +80,15 @@ function footer(): string[] {
   const t = total.value
   if (!t) return []
   return ['All accounts', '', num(t.quantity), perDay(t.quantity, days.value), ...(hasKt.value ? [money(t.kt)] : []),
-    ...(hasCf.value ? [money(t.cf)] : []), ...(hasKt.value && hasCf.value ? [signedMoney(t.kt_minus_cf)] : [])]
+    ...(hasCf.value ? [money(t.cf)] : []), ...(hasKt.value && hasCf.value ? [signedMoney(t.cf_minus_kt)] : [])]
 }
 
 function exportCsv() {
   const d = data.value
   if (!d) return
-  const header = ['Account', 'Team', 'In KH', 'Quantity', 'Avg sales/day', 'PL2 KT (est.)', 'PL2 CF (actual)', 'KT − CF']
+  const header = ['Account', 'Team', 'In KH', 'Quantity', 'Avg sales/day', 'PL2 KT (est.)', 'PL2 CF (actual)', 'CF − KT']
   const line = (r: Pl2AccountLine, inKh: string) => [r.shop, r.team ?? '', inKh, r.quantity, perDayValue(r.quantity, days.value), r.kt ?? '',
-    r.cf ?? '', r.kt_minus_cf ?? '']
+    r.cf ?? '', r.cf_minus_kt ?? '']
   const body = [...d.accounts.map((a) => line(a, 'yes')), ...d.others.children.map((c) => line(c, 'no'))]
   downloadCsv(`pl2-by-account-${props.params.date_from}_${props.params.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} accounts`)
@@ -144,9 +144,10 @@ function exportCsv() {
           <span class="num font-semibold" :style="{ color: gapColor(row.cf) }">{{ row.cf == null ? '' : money(row.cf) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="hasKt && hasCf" label="KT − CF" prop="kt_minus_cf" min-width="120" align="right" sortable>
+      <el-table-column v-if="hasKt && hasCf" label="CF − KT" prop="cf_minus_kt" min-width="120" align="right" sortable>
         <template #default="{ row }">
-          <span class="num" title="PL2 KT − PL2 CF: how far the estimate is from what finance books">{{ signedMoney(row.kt_minus_cf) }}</span>
+          <span class="num font-semibold" :style="{ color: gapColor(row.cf_minus_kt) }"
+                title="PL2 CF − PL2 KT: what finance books against the estimate">{{ signedMoney(row.cf_minus_kt) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -155,7 +156,7 @@ function exportCsv() {
       takes over (Settings › Plan). Other accounts adds up the stores outside the plans that have a PL2 (KT or CF not 0); All accounts
       is the plans' accounts plus them. PL2 KT = the account's quantity of each plan product × that product's PL2/item, for the
       report's days (pieces added by hand, Felt, are not tied to an account). PL2 CF = finance's PROFIT THỰC ĐẠT of the account
-      ("PL Account Etsy_Monthly"), booked per month: the range counts the whole months it touches. KT − CF = PL2 KT − PL2 CF.
+      ("PL Account Etsy_Monthly"), booked per month: the range counts the whole months it touches. CF − KT = PL2 CF − PL2 KT.
     </div>
   </div>
 </template>

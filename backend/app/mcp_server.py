@@ -128,7 +128,7 @@ def etsy_pl2(ctx: Context, date_from: str = "", date_to: str = "", shops: str = 
 @mcp.tool(description=(
     "PL2 per account: each account (store) of the KH plans with quantity, kt (PL2 theo KT = its quantity of each plan product × "
     "that product's PL2/item), cf (finance's PROFIT THỰC ĐẠT of the account, from \"PL Account Etsy_Monthly\", the months the "
-    "range touches) and kt_minus_cf; accounts outside the plans with a PL2 add up under `others` (children list them). Same "
+    "range touches) and cf_minus_kt (CF − KT); accounts outside the plans with a PL2 add up under `others` (children list them). Same "
     "filters as etsy_totals; seller / designer / keyword filters leave CF out."))
 def etsy_pl2_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
                       teams: str | None = None, keyword: str = "") -> dict:
