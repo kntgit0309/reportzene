@@ -52,11 +52,11 @@ function exportCsv() {
     <el-alert v-else-if="report && !hasPlan" type="info" :title="report.plan.error" :closable="false" show-icon class="!mb-3" />
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
-              show-summary :summary-method="footer" :empty-text="`No ${family.name.toLowerCase()} sales for these filters`" class="w-full">
+              show-summary :summary-method="footer" :empty-text="`No sales of ${family.plural} for these filters`" class="w-full">
       <el-table-column :label="`Account / ${family.accountParts}`" min-width="230" class-name="tree-cell">
         <template #default="{ row }">
           {{ row.label }}
-          <el-tag v-if="row.in_plan === false" size="small" type="info" class="ml-1">not in plan</el-tag>
+          <el-tag v-if="hasPlan && row.in_plan === false" size="small" type="info" class="ml-1">not in plan</el-tag>
           <div v-if="row.replaces?.length" class="truncate text-xs text-amber-600"
                :title="`Takes over the plan line and the sales of suspended ${row.replaces.join(', ')} (Settings › Plan)`">
             replaces {{ row.replaces.join(', ') }}

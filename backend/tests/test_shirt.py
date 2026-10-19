@@ -88,7 +88,7 @@ def test_shirt_plan_counts_t_shirt_and_sweatshirt_together():
 def test_shirt_report_is_one_product_type_opening_onto_its_sub_types(client, member, upstream, plan_sheet):
     data = client.get(f"{S}?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
 
-    assert data["family"] == {"key": "shirt", "name": "Shirt"} and data["fix_note"] is None
+    assert data["family"] == {"key": "shirt", "name": "Shirt", "sub_types": list(SHIRT.sub_types)} and data["fix_note"] is None
     [shirt] = data["groups"]
     assert shirt["name"] == "Shirt" and [c["name"] for c in shirt["children"]] == list(SHIRT.sub_types)
     assert shirt["total_order"] == 2 * sum(ORDERS.values()) == data["total"]["total_order"]

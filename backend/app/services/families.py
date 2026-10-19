@@ -1,8 +1,8 @@
-"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel): the team's
-grouping of trackingis sub product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt…) maps
-onto it.
+"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel, Others): the
+team's grouping of trackingis sub product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt…)
+maps onto it.
 Adding a family: an entry here and in web/src/lib/families.ts; its plan sheet is picked in Settings › Plan."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 
@@ -18,6 +18,8 @@ class Family:
     # Quantity trackingis misses, added by hand: sub product type → {day: pieces}; only in the team-wide view
     quantity_fixes: dict[str, dict[str, int]] = field(default_factory=dict)
     fix_note: str | None = None
+    # Product type taking every trackingis sub product type no family lists (Others); its rows are trackingis product types
+    rest_group: str | None = None
 
     @property
     def sub_types(self) -> tuple[str, ...]:
@@ -106,4 +108,28 @@ BADGE_REEL = Family(
     plan_note="the plan has one Total per month, for Badge Reel as a whole",
 )
 
-FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG, WOODEN_BLOCK, BADGE_REEL)}
+# The products of KH SP khác (planned per product for ZenE as a whole, not per shop), and every sub product type no other
+# family lists. "Car Sticker" and "UV DTF Car Sticker" are not in trackingis' sub product type list yet (19/10/2026).
+OTHERS = Family(
+    key="others",
+    name="Others",
+    groups=(("Sticker", ("Bumper Sticker", "Peeker Sticker", "UV DTF Sticker", "Car Sticker", "UV DTF Car Sticker", "Sticker")),
+            ("Scrub cap", ("Scrub cap",)), ("Fabric Welcome Sign", ("Fabric Welcome Sign",)), ("Baseball Jersey", ("Baseball Jersey",))),
+    plan_groups={"sticker": "Sticker", "scrub cap": "Scrub cap", "fabric welcome sign": "Fabric Welcome Sign",
+                 "baseball jersey": "Baseball Jersey"},
+    plan_other="Other products",
+    plan_note="KH SP khác plans per product (Sticker, Scrub cap, Fabric Welcome Sign, Baseball Jersey) for ZenE as a whole",
+    rest_group="Other products",
+)
+
+FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}
+
+
+def with_rest(family: Family, all_sub_types: list[str]) -> Family:
+    """The family with its rest group: every trackingis sub product type (in trackingis order) that no family lists.
+    A family without a rest group, or with nothing left over, is returned as it is."""
+    if not family.rest_group:
+        return family
+    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types}
+    rest = tuple(s for s in all_sub_types if s.lower() not in listed)
+    return replace(family, groups=(*family.groups, (family.rest_group, rest))) if rest else family

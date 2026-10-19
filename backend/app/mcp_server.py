@@ -103,6 +103,9 @@ def _family_tools(family: Family) -> None:
     """etsy_<family> and etsy_<family>_accounts for a product family with its own Etsy page (families.FAMILIES)."""
     name, plural = family.name, family.name.lower()
     types = "; ".join(f"{group} ({', '.join(subs)})" for group, subs in family.groups)
+    if family.rest_group:
+        types += (f"; {family.rest_group} (every trackingis sub product type no other etsy_* tool covers, its rows per trackingis "
+                  "product type)")
     children = "product type" if len(family.groups) > 1 else "sub product type (actuals only)"
 
     def sales(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
