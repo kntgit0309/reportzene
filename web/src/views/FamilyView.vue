@@ -3,32 +3,37 @@ import { computed, onMounted, ref } from 'vue'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
-import OrnamentAccounts from '../components/report/OrnamentAccounts.vue'
-import OrnamentChart from '../components/report/OrnamentChart.vue'
-import OrnamentPlanChart from '../components/report/OrnamentPlanChart.vue'
+import FamilyAccounts from '../components/report/FamilyAccounts.vue'
+import FamilyChart from '../components/report/FamilyChart.vue'
+import FamilyPlanChart from '../components/report/FamilyPlanChart.vue'
 import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
 import { auth } from '../lib/auth'
+import { FAMILIES } from '../lib/families'
 import { dateTime, money, num, pct } from '../lib/format'
 import { bar, barColor, gapClass, gapColor, gapOf, pcs, signedPcs } from '../lib/plan'
-import { downloadCsv, emptyFilters, fetchOrnament, fetchOrnamentAccounts, filterParams } from '../lib/report'
-import type { Filters, OrnamentAccountsReport, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
+import { downloadCsv, emptyFilters, fetchFamily, fetchFamilyAccounts, filterParams } from '../lib/report'
+import type { FamilyAccountsReport, FamilyKey, FamilyLine, FamilyMetric, FamilyReport, Filters } from '../lib/types'
 
-type Row = OrnamentLine & { key: string; gap?: number; children?: Row[] }
+type Row = FamilyLine & { key: string; gap?: number; children?: Row[] }
+
+// Etsy › Ornament, Etsy › Shirt: the family comes from the route
+const props = defineProps<{ family: FamilyKey }>()
+const fam = FAMILIES[props.family]
 
 const filters = ref<Filters>(emptyFilters())
 const teamsTouched = ref(false)
 const applied = ref<Record<string, string>>(filterParams(filters.value, false))
-const data = ref<OrnamentReport | null>(null)
+const data = ref<FamilyReport | null>(null)
 const defaultTeams = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 const showChart = ref(true)
-const metric = ref<OrnamentMetric>('total_revenue')
-// The report's views (date, store, seller…) for the same filters, restricted to the ornament sub product types
+const metric = ref<FamilyMetric>('total_revenue')
+// The report's views (date, store, seller…) for the same filters, restricted to the family's sub product types
 const breakdownParams = ref<Record<string, string> | null>(null)
 // Per store (account) against the store's line of the plan: its own request, loaded alongside
-const accounts = ref<OrnamentAccountsReport | null>(null)
+const accounts = ref<FamilyAccountsReport | null>(null)
 const accountsLoading = ref(false)
 const accountsError = ref('')
 
@@ -36,7 +41,7 @@ async function loadAccounts() {
   accountsLoading.value = true
   accountsError.value = ''
   try {
-    accounts.value = await fetchOrnamentAccounts(applied.value)
+    accounts.value = await fetchFamilyAccounts(fam.key, applied.value)
   } catch (e) {
     accounts.value = null
     accountsError.value = (e as Error).message
@@ -49,7 +54,7 @@ async function load() {
   error.value = ''
   loadAccounts()
   try {
-    data.value = await fetchOrnament(applied.value)
+    data.value = await fetchFamily(fam.key, applied.value)
     if (!teamsTouched.value) defaultTeams.value = data.value.query.teams
     const subs = data.value.groups.flatMap((g) => g.children.map((c) => c.name))
     breakdownParams.value = { ...applied.value, sub_product_types: subs.join(',') }
@@ -86,9 +91,11 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-const subtitle = computed(() => `ZenE ornament sales by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
+const subtitle = computed(() => `ZenE ${fam.name.toLowerCase()} sales by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
+// A family of a single product type (Shirt): no per type plan chart, the day chart stacks its sub product types
+const oneType = computed(() => (data.value?.groups.length ?? 0) === 1)
 
-// --- plan (sheet "KH Ornament"): pieces, compared with the quantity sold ---
+// --- plan (sheet "KH Ornament", "KH Shirt"): pieces, compared with the quantity sold ---
 const plan = computed(() => data.value?.plan)
 const hasPlan = computed(() => !!plan.value && !plan.value.error)
 const planSource = computed(() => {
@@ -115,12 +122,12 @@ const planKpis = computed(() => {
 function rowClass({ row }: { row: Row }) {
   return row.children ? 'row-parent' : 'row-child'
 }
-/** Footer = all ornaments together (an order with several types counts once here). */
+/** Footer = the whole family together (an order with several types counts once here). */
 function footer(): string[] {
   const t = total.value
   if (!t) return []
   const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  return ['All ornaments', num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
+  return [`All ${fam.plural}`, num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
 const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
@@ -134,7 +141,7 @@ function exportCsv() {
     r.achieved ?? '', r.plan_month ?? '',
     r.total_revenue, r.avg_order_value, r.share ?? '',
   ]))
-  downloadCsv(`ornament-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
+  downloadCsv(`${fam.key}-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
 }
 </script>
@@ -173,13 +180,13 @@ function exportCsv() {
           <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
         </div>
       </div>
-      <OrnamentPlanChart :groups="data.groups" />
+      <FamilyPlanChart v-if="!oneType" :groups="data.groups" />
     </template>
   </div>
 
   <div class="section-card">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <h3 class="card-title !mb-0">Ornament by product type</h3>
+      <h3 class="card-title !mb-0">{{ fam.name }} by {{ oneType ? 'sub product type' : 'product type' }}</h3>
       <div class="flex items-center gap-3">
         <el-select v-if="showChart" v-model="metric" size="small" class="!w-[130px]">
           <el-option label="Revenue" value="total_revenue" />
@@ -191,10 +198,10 @@ function exportCsv() {
     </div>
 
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!mb-3" />
-    <OrnamentChart v-if="showChart && data" :groups="data.groups" :metric="metric" class="mb-3" />
+    <FamilyChart v-if="showChart && data" :groups="data.groups" :metric="metric" class="mb-3" />
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
-              show-summary :summary-method="footer" empty-text="No ornament sales for these filters" class="w-full">
+              show-summary :summary-method="footer" :empty-text="`No ${fam.name.toLowerCase()} sales for these filters`" class="w-full">
       <el-table-column label="Product type / Sub product type" min-width="260" class-name="tree-cell">
         <template #default="{ row }">{{ row.name }}</template>
       </el-table-column>
@@ -240,18 +247,19 @@ function exportCsv() {
     </el-table>
     <div v-if="data?.fix_note" class="mt-2 text-xs text-amber-600">Quantity {{ data.fix_note }}.</div>
     <div class="mt-2 text-xs text-muted">
-      Product types group trackingis sub product types (Wooden Garland is in Others). An order with ornaments of several types
-      counts in each, so the rows can add up to a little more than the total.
-      <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others. Gap = Quantity − Plan to date.</template>
+      {{ fam.groupsNote }} An order with {{ fam.plural }} of several types counts in each, so the rows can add up to a little more
+      than the total.
+      <template v-if="hasPlan">Plan: {{ fam.planNote }} Gap = Quantity − Plan to date.</template>
     </div>
   </div>
 
-  <OrnamentAccounts :report="accounts" :loading="accountsLoading" :error="accountsError" :date-from="applied.date_from" :date-to="applied.date_to" />
+  <FamilyAccounts :family="fam" :report="accounts" :loading="accountsLoading" :error="accountsError" :date-from="applied.date_from"
+                  :date-to="applied.date_to" />
 
-  <ReportBreakdown v-if="breakdownParams" :params="breakdownParams" title="Ornament by date, order, product, store, seller and product type">
+  <ReportBreakdown v-if="breakdownParams" :params="breakdownParams" :title="`${fam.name} by date, order, product, store, seller and product type`">
     <div class="mt-2 text-xs text-muted">
-      Same views as Report, for every ornament sub product type above, straight from trackingis
-      <template v-if="data?.fix_note">(without the Felt pieces added by hand)</template>.
+      Same views as Report, for every {{ fam.name.toLowerCase() }} sub product type above, straight from trackingis
+      <template v-if="data?.fix_note">(without the pieces added by hand)</template>.
     </div>
   </ReportBreakdown>
 </template>

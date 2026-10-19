@@ -5,10 +5,12 @@ import httpx
 import pytest
 
 from app.services import trackingis
-from app.services.ornament import ALL_SUB_TYPES, GROUPS, WORKERS
+from app.services.families import ORNAMENT
+from app.services.family_report import WORKERS
 from tests.test_report import _save_token
 
 O = "/api/v1/report/etsy/ornament"
+GROUPS, ALL_SUB_TYPES = ORNAMENT.groups, ORNAMENT.sub_types
 ORDERS = {s: i + 1 for i, s in enumerate(ALL_SUB_TYPES)}  # orders per day of each sub product type in the fake trackingis
 DAYS = ("2026-10-01", "2026-10-02")
 

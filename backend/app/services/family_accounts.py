@@ -1,9 +1,10 @@
-"""Etsy › Ornament by account: each store's ornament sales (trackingis) next to its line of the KH Ornament plan.
+"""Etsy › Ornament / Shirt by account: each store's sales of the family (trackingis) next to its line of the family's plan.
 
-Actual: the trackingis store view filtered on every ornament sub product type, and once per product type for the
-breakdown (run in parallel, cached like the report). Plan: the shop rows of the plan sheet, matched by store name.
-A suspended store listed in Settings › Plan hands its plan line and its sales to its replacement.
-Pieces added by hand (ornament.QUANTITY_FIXES) are not tied to a store, so they are not in these rows.
+Actual: the trackingis store view filtered on every sub product type of the family, and once per product type for the
+breakdown — per sub product type when the family is a single product type (run in parallel, cached like the report).
+Plan: the shop rows of the plan sheet, matched by store name. A suspended store listed in Settings › Plan hands its plan
+line and its sales to its replacement. Pieces added by hand (Family.quantity_fixes) are not tied to a store, so they are
+not in these rows.
 """
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -12,7 +13,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import ornament, ornament_plan, report, settings_store
+from app.services import family_plan, family_report, report, settings_store
+from app.services.families import Family
 from app.services.trackingis import MAX_PER_PAGE, ReportQuery, TrackingisClient, TrackingisError
 
 MAX_PAGES = 5  # 200 stores per page
@@ -29,10 +31,15 @@ def _stores(client: TrackingisClient, q: ReportQuery) -> list[dict[str, Any]]:
     return rows
 
 
-def _fetch(client: TrackingisClient, q: ReportQuery) -> dict[str, Any]:
-    with ThreadPoolExecutor(max_workers=ornament.WORKERS) as pool:
-        every = pool.submit(_stores, client, ornament._only(q, ornament.ALL_SUB_TYPES))
-        groups = {name: pool.submit(_stores, client, ornament._only(q, subs)) for name, subs in ornament.GROUPS}
+def _parts(family: Family) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """What a store opens onto: its product types, or its sub product types when the family is a single product type."""
+    return family.groups if len(family.groups) > 1 else tuple((s, (s,)) for s in family.sub_types)
+
+
+def _fetch(client: TrackingisClient, family: Family, q: ReportQuery) -> dict[str, Any]:
+    with ThreadPoolExecutor(max_workers=family_report.WORKERS) as pool:
+        every = pool.submit(_stores, client, family_report._only(q, family.sub_types))
+        groups = {name: pool.submit(_stores, client, family_report._only(q, subs)) for name, subs in _parts(family)}
         try:
             return {"all": every.result(), "groups": {name: f.result() for name, f in groups.items()}}
         except TrackingisError:
@@ -75,25 +82,27 @@ def _sum_plan(shop_plans: list[dict[str, Any]]) -> dict[str, float]:
     return {"plan": sum(g["plan"] for g in groups), "plan_month": sum(g["plan_month"] for g in groups)}
 
 
-def accounts_report(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+def accounts_report(db: Session, family: Family, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{accounts: [{shop, team, in_plan, …metrics, plan, plan_month, achieved, children: [product type lines]}], total, plan,
-    query}. Stores of the plan come first in sheet order, then stores with ornament sales but no plan line."""
+    query}. Stores of the plan come first in sheet order, then stores with sales of the family but no plan line. Children
+    are sub product types, without a plan, when the family is a single product type."""
     q = report.build_query(db, {**params, "view": "date"})
-    data = report._call(db, user, report._key("ornament_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, q))
+    data = report._call(db, user, report._key(f"{family.key}_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, family, q))
     replacements = settings_store.runtime(db).account_replacements
     to = {_key(old): new.strip() for old, new in replacements}
     actual = _by_store(data["all"], to)
-    by_group = {name: _by_store(rows, to) for name, rows in data["groups"].items()}
+    by_part = {name: _by_store(rows, to) for name, rows in data["groups"].items()}
 
-    s = ornament_plan.scope(db, q, user)
+    s = family_plan.scope(db, family, q, user)
     plans: list[dict[str, Any]] = []
     plan_info: dict[str, Any] = {"error": s["error"]} if "error" in s else {}
     if not plan_info:
-        per_shop = ornament_plan.shop_plans(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
+        per_shop = family_plan.shop_plans(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
         plans = per_shop["shops"]
-        plan_info = {"sheet": ornament_plan.sheet_info(s["source"]), "scope": s["label"], "months": per_shop["months"],
+        plan_info = {"sheet": family_plan.sheet_info(s["source"]), "scope": s["label"], "months": per_shop["months"],
                      "missing_months": per_shop["missing_months"]}
     has_plan = "error" not in plan_info
+    by_group = len(family.groups) > 1  # children are the plan's product types, so they carry their part of the plan
 
     planned = {_key(p["shop"]): p for p in plans}
     others = sorted((k for k in actual if k not in planned), key=lambda k: -float(actual[k].get("total_revenue") or 0))
@@ -102,13 +111,13 @@ def accounts_report(db: Session, params: dict[str, Any], user: User | None = Non
         p = planned.get(key)
         name = p["shop"] if p else str(actual[key].get("shop_name") or key)
         children = []
-        for group, _subs in ornament.GROUPS:
-            row = by_group[group].get(key)
-            gp = (p["groups"].get(group) if p else None) if has_plan else None
+        for part, _subs in _parts(family):
+            row = by_part[part].get(key)
+            gp = p["groups"].get(part) if p and has_plan and by_group else None
             if row is None and not (gp and gp["plan_month"]):
                 continue
-            line = {"name": group, **_metrics(row)}
-            children.append(_with_plan(line, gp or ({"plan": 0.0, "plan_month": 0.0} if p else None)) if has_plan else line)
+            line = {"name": part, **_metrics(row)}
+            children.append(_with_plan(line, gp or ({"plan": 0.0, "plan_month": 0.0} if p else None)) if has_plan and by_group else line)
         line = {"shop": name, "team": p["team"] if p else None, "in_plan": p is not None, **_metrics(actual.get(key)),
                 "replaces": [old for old, new in replacements if _key(new) == key], "children": children}
         accounts.append(_with_plan(line, _sum_plan([p]) if p else None) if has_plan else line)

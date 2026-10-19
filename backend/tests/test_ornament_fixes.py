@@ -1,8 +1,9 @@
-from app.services.ornament import GROUPS, QUANTITY_FIXES
+from app.services.families import ORNAMENT
 from tests.test_ornament import O, ORDERS, upstream  # noqa: F401  (fixture)
 from tests.test_report import _save_token
 
-FELT = QUANTITY_FIXES["Felt Ornament"]
+GROUPS = ORNAMENT.groups
+FELT = ORNAMENT.quantity_fixes["Felt Ornament"]
 
 
 def test_name_ornament_counts_in_acrylic_wood():

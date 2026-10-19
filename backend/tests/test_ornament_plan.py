@@ -3,7 +3,8 @@ import pytest
 from app.core.errors import AppError
 from app.models import SheetSource
 from app.services import report
-from app.services.ornament_plan import month_days, parse, plan_for
+from app.services.families import ORNAMENT
+from app.services.family_plan import month_days, parse, plan_for
 from tests.test_ornament import O, upstream  # noqa: F401  (fixture)
 from tests.test_report import _save_token
 
@@ -38,7 +39,7 @@ OCT_ACRYLIC_WOOD = (215 + 80) + (50 + 20) + (30 + 0)
 
 
 def test_plan_sheet_is_read_per_shop_month_and_product_type():
-    plan = parse(HEADER, ROWS)
+    plan = parse(HEADER, ROWS, ORNAMENT)
     assert plan["months"] == ["10-2026", "11-2026", "12-2026"] and [s["shop"] for s in plan["shops"]] == ["PunGanterdesign",
                                                                                                           "Daisyfloralsshop", "OnebyHenry"]
     pun = plan["shops"][0]["plan"]["10-2026"]
@@ -62,7 +63,7 @@ def test_month_days_splits_a_range_over_months():
 
 def test_plan_sheet_without_its_labels_is_a_layout_error():
     with pytest.raises(AppError) as err:
-        parse(HEADER, ROWS[1:])
+        parse(HEADER, ROWS[1:], ORNAMENT)
     assert err.value.code == "ORNAMENT_PLAN_LAYOUT"
 
 

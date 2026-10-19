@@ -4,14 +4,17 @@ import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { money, num, pct } from '../../lib/format'
 import { bar, barColor, gapClass, gapOf, pcs, signedPcs } from '../../lib/plan'
+import type { Family } from '../../lib/families'
 import { downloadCsv } from '../../lib/report'
-import type { OrnamentAccountLine, OrnamentAccountsReport } from '../../lib/types'
+import type { FamilyAccountLine, FamilyAccountsReport } from '../../lib/types'
 
-type Row = OrnamentAccountLine & {
+type Row = FamilyAccountLine & {
   key: string; label: string; team?: string | null; in_plan?: boolean; replaces?: string[]; gap?: number; children?: Row[]
 }
 
-const props = defineProps<{ report: OrnamentAccountsReport | null; loading: boolean; error: string; dateFrom: string; dateTo: string }>()
+const props = defineProps<{
+  family: Family; report: FamilyAccountsReport | null; loading: boolean; error: string; dateFrom: string; dateTo: string
+}>()
 
 const hasPlan = computed(() => !!props.report && !props.report.plan.error)
 const rows = computed<Row[]>(() => (props.report?.accounts ?? []).map((a) => ({
@@ -28,13 +31,13 @@ function footer(): string[] {
 }
 
 function exportCsv() {
-  const header = ['Account', 'Team', 'Product type', 'In plan', 'Total order', 'Quantity', 'Plan to date', 'Gap', '% of plan', 'Month plan',
+  const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Plan to date', 'Gap', '% of plan', 'Month plan',
     'Revenue', 'Avg order value']
   const body = rows.value.flatMap((a) => [a, ...(a.children ?? [])].map((r) => [
     a.label, a.team ?? '', r === a ? '' : r.label, a.in_plan ? 'yes' : 'no', r.total_order, r.total_quantity, r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.avg_order_value,
   ]))
-  downloadCsv(`ornament-accounts-${props.dateFrom}_${props.dateTo}.csv`, header, body)
+  downloadCsv(`${props.family.key}-accounts-${props.dateFrom}_${props.dateTo}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
 }
 </script>
@@ -42,15 +45,15 @@ function exportCsv() {
 <template>
   <div class="section-card">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <h3 class="card-title !mb-0">Ornament by account (store)</h3>
+      <h3 class="card-title !mb-0">{{ family.name }} by account (store)</h3>
       <el-button size="small" type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
     </div>
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!mb-3" />
     <el-alert v-else-if="report && !hasPlan" type="info" :title="report.plan.error" :closable="false" show-icon class="!mb-3" />
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
-              show-summary :summary-method="footer" empty-text="No ornament sales for these filters" class="w-full">
-      <el-table-column label="Account / Product type" min-width="230" class-name="tree-cell">
+              show-summary :summary-method="footer" :empty-text="`No ${family.name.toLowerCase()} sales for these filters`" class="w-full">
+      <el-table-column :label="`Account / ${family.accountParts}`" min-width="230" class-name="tree-cell">
         <template #default="{ row }">
           {{ row.label }}
           <el-tag v-if="row.in_plan === false" size="small" type="info" class="ml-1">not in plan</el-tag>
@@ -98,9 +101,8 @@ function exportCsv() {
       </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-muted">
-      Plan: each store's row of the plan sheet, matched by store name; a store opens onto its product types. Actual: trackingis,
-      ornament sub product types only, so the Felt pieces added by hand (not tied to a store) are not in these rows. A suspended
-      store listed in Settings › Plan hands its plan line and its sales to its replacement.
+      Plan: each store's row of the plan sheet, matched by store name; {{ family.accountsNote }} A suspended store listed in
+      Settings › Plan hands its plan line and its sales to its replacement.
     </div>
   </div>
 </template>

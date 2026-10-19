@@ -1,0 +1,119 @@
+"""Etsy › Ornament, Etsy › Shirt: ZenE sales of a product family per product type, the team's own grouping of trackingis
+sub product types (app.services.families).
+
+Each product type and each sub product type is one trackingis query filtered on its sub product types (same date / store /
+seller / team filters as the report), run in parallel. An order holding several types of the family counts in each of them,
+so the overall total is its own query rather than the sum of the rows.
+"""
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.models import User
+from app.services import family_plan, report, settings_store
+from app.services.families import Family
+from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError, summarize
+
+WORKERS = 8
+DAY_FIELDS = ("date_at", "total_order", "total_quantity", "total_revenue")
+
+
+def _only(q: ReportQuery, subs: tuple[str, ...]) -> ReportQuery:
+    """The same filters, restricted to these sub product types (the page's own product type filters are ignored)."""
+    return replace(q, view="date", page=1, lists={**q.lists, "product_types": [], "sub_product_types": list(subs)})
+
+
+def _fetch(client: TrackingisClient, family: Family, q: ReportQuery) -> dict[str, Any]:
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        total = pool.submit(client.totals, _only(q, family.sub_types))
+        groups = [pool.submit(client.daily, _only(q, subs)) for _, subs in family.groups]
+        subs = {s: pool.submit(client.daily, _only(q, (s,))) for s in family.sub_types}
+        try:
+            return {"total": total.result(), "groups": [g.result() for g in groups], "subs": {s: f.result() for s, f in subs.items()}}
+        except TrackingisError:
+            pool.shutdown(cancel_futures=True)  # a refused token fails every query: don't send the ones still queued
+            raise
+
+
+def _share(part: float, whole: float) -> float | None:
+    return round(part / whole, 4) if whole else None
+
+
+def _fixes_apply(db: Session, q: ReportQuery) -> bool:
+    narrowed = any(q.lists.get(f) for f in ("shops", "sellers", "designers")) or q.texts.get("keyword")
+    teams = q.lists.get("teams") or []
+    return not narrowed and (not teams or teams == settings_store.runtime(db).default_teams)
+
+
+def _with_fixes(days: list[dict[str, Any]], fixes: dict[str, int]) -> list[dict[str, Any]]:
+    """Day rows with the hand-added quantity (new dicts: the cached answer stays as trackingis sent it)."""
+    out = {d["date_at"]: {**d, "total_quantity": (d.get("total_quantity") or 0) + fixes.get(d["date_at"], 0)} for d in days}
+    for day, pcs in fixes.items():
+        out.setdefault(day, {"date_at": day, "total_order": 0, "total_quantity": pcs, "total": 0, "sale_tax": 0, "total_revenue": 0})
+    return sorted(out.values(), key=lambda d: d["date_at"])
+
+
+def _plus_quantity(totals: dict[str, Any], pcs: int) -> dict[str, Any]:
+    return {**totals, "total_quantity": totals["total_quantity"] + pcs, "fix_quantity": pcs} if pcs else totals
+
+
+def _line(name: str, days: list[dict[str, Any]], fixes: dict[str, int], revenue: float) -> dict[str, Any]:
+    """Totals of these day rows plus the hand-added quantity, and the day rows themselves."""
+    days = _with_fixes(days, fixes) if fixes else days
+    totals = summarize(days)
+    if fixes:
+        totals["fix_quantity"] = sum(fixes.values())
+    return {"name": name, **totals, "share": _share(totals["total_revenue"], revenue), "daily": [{f: d.get(f) for f in DAY_FIELDS} for d in days]}
+
+
+def family_report(db: Session, family: Family, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+    """{family, total, groups: [{name, ...totals, share, daily, children: [{name, ...totals, share}]}], fix_note, plan, query}.
+
+    Rows carrying hand-added quantity (family.quantity_fixes) have `fix_quantity` = the pieces added. With the family's
+    plan sheet (Settings › Plan), product types and the total also carry plan / plan_month / achieved. A family of a single
+    product type also gives its sub product types their `daily` rows (the page's chart then stacks them)."""
+    q = report.build_query(db, {**params, "view": "date"})
+    data = report._call(db, user, report._key(family.key, q), report.CACHE_TTL_S, lambda c: _fetch(c, family, q))
+    fixes = {s: {d: n for d, n in by_day.items() if q.date_from <= d <= q.date_to} for s, by_day in family.quantity_fixes.items()}
+    fixes = {s: by_day for s, by_day in fixes.items() if by_day} if _fixes_apply(db, q) else {}
+
+    revenue = data["total"]["total_revenue"]
+    sub_days = len(family.groups) == 1
+    groups = []
+    for (name, subs), days in zip(family.groups, data["groups"], strict=True):
+        group_fix: dict[str, int] = {}
+        for s in subs:
+            for d, n in fixes.get(s, {}).items():
+                group_fix[d] = group_fix.get(d, 0) + n
+        children = [_line(s, data["subs"][s], fixes.get(s, {}), revenue) for s in subs]
+        if not sub_days:
+            children = [{k: v for k, v in c.items() if k != "daily"} for c in children]
+        groups.append({**_line(name, days, group_fix, revenue), "children": children})
+    total = {**_plus_quantity(data["total"], sum(n for by_day in fixes.values() for n in by_day.values()))}
+    plan = _attach_plan(db, family, q, user, groups, total)
+    return {"family": {"key": family.key, "name": family.name}, "total": total, "groups": groups,
+            "fix_note": family.fix_note if fixes else None, "plan": plan,
+            "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
+
+
+def _attach_plan(db: Session, family: Family, q: ReportQuery, user: User | None, groups: list[dict[str, Any]],
+                 total: dict[str, Any]) -> dict[str, Any]:
+    """Add plan (pieces, pro rata over the range), plan_month and achieved (quantity / plan) to the product types and the
+    total; return the plan's source and scope, or {"error"} when there is none to compare with."""
+    plan = family_plan.for_report(db, family, q, user)
+    if "error" in plan:
+        return plan
+    by_group = plan.pop("groups")
+    for row in groups:
+        p = by_group.get(row["name"], {"plan": 0.0, "plan_month": 0})
+        row |= {"plan": p["plan"], "plan_month": p["plan_month"], "achieved": _ratio(row["total_quantity"], p["plan"])}
+    total["plan"] = round(sum(p["plan"] for p in by_group.values()), 1)
+    total["plan_month"] = sum(p["plan_month"] for p in by_group.values())
+    total["achieved"] = _ratio(total["total_quantity"], total["plan"])
+    return plan
+
+
+def _ratio(actual: float, plan: float) -> float | None:
+    return round(actual / plan, 4) if plan else None
