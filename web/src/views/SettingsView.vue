@@ -10,14 +10,15 @@ import type { Option, Sheet } from '../lib/types'
 
 type Status = {
   trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number
-  plan_sheet_id: number | null; plan_start_column: number; plan_products: number
+  plan_sheet_id: number | null; plan_start_column: number; plan_products: number; ornament_plan_sheet_id: number | null
 }
 type Check = { ok: boolean; message: string }
 
 const tab = ref('connections')
 const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '',
-  plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined })
+  plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
+  ornament_plan_sheet_id: null as number | null | undefined })
 const teams = ref<Option[]>([])
 const sheets = ref<Sheet[]>([])
 const saving = ref(false)
@@ -27,7 +28,8 @@ const checks = ref<Record<string, Check> | null>(null)
 function fill(s: Status) {
   status.value = s
   Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, default_teams: s.default_teams.map(Number),
-    plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products })
+    plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
+    ornament_plan_sheet_id: s.ornament_plan_sheet_id })
 }
 async function loadTeams() {
   try { teams.value = (await fetchOptions('teams')).filter((t) => t.type !== 'bu') } catch { teams.value = [] }
@@ -45,7 +47,8 @@ async function test() {
 async function save() {
   saving.value = true
   try {
-    const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0 })
+    const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
+      ornament_plan_sheet_id: form.ornament_plan_sheet_id ?? 0 })
     fill(res.data)
     ElMessage.success(res.meta.message)
     await test()
@@ -103,6 +106,14 @@ async function save() {
           <div class="-mt-2 mb-4 text-xs text-muted">
             The start column holds "Product", then PL2/item, Total Sales, Total PL2, Tỷ trọng and the month columns (Sales/mo, Sales/day, PL2).
           </div>
+          <el-form-item label="Ornament plan sheet (Etsy › Ornament)">
+            <el-select v-model="form.ornament_plan_sheet_id" clearable placeholder="No ornament plan" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              The "KH Ornament" tab: a "Shop Name | Team" label row, then per month a "Total" column and the categories, in pieces.
+            </div>
+          </el-form-item>
 
           <div class="flex gap-2">
             <el-button type="primary" native-type="submit" :loading="saving">Save</el-button>

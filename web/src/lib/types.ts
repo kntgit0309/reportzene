@@ -49,14 +49,27 @@ export type OrnamentLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null
   fix_quantity?: number // pieces trackingis misses, added by hand (already inside total_quantity)
+  plan?: number // planned pieces for the date range (months pro rata), product types and total only
+  plan_month?: number // planned pieces of the whole months the range touches
+  achieved?: number | null // total_quantity / plan
+}
+/** Where the ornament plan comes from, or why there is none for these filters. */
+export type OrnamentPlanInfo = {
+  error?: string
+  sheet?: { id: number; name: string; tab_title: string; last_synced_at: string | null }
+  scope?: string
+  months?: { month: string; days: number; month_days: number }[]
+  missing_months?: string[]
+  shops?: number
 }
 export type OrnamentMetric = 'total_revenue' | 'total_order' | 'total_quantity'
 export type OrnamentDay ={ date_at: string; total_order: number; total_quantity: number; total_revenue: number }
 export type OrnamentGroup = OrnamentLine & { children: OrnamentLine[]; daily: OrnamentDay[] }
 export type OrnamentReport = {
-  total: Omit<Totals, 'date_from' | 'date_to'> & { fix_quantity?: number }
+  total: Omit<Totals, 'date_from' | 'date_to'> & Pick<OrnamentLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
   groups: OrnamentGroup[]
   fix_note: string | null
+  plan: OrnamentPlanInfo
   query: { date_from: string; date_to: string; teams: string[] }
 }
 

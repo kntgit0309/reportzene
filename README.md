@@ -12,7 +12,7 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 | Trang | Nội dung |
 |---|---|
 | Etsy › Report | 6 view giống trang Report Etsy của trackingis: Date (mở ra từng store), Order, Product, Store (mở ra từng ngày), Seller, Product type. Filter ngày, keyword, store, seller, designer, product type, sub product type, team, total order. Ô KPI: revenue, orders, quantity, AOV, total, sale tax. Chart + export CSV. |
-| Etsy › Ornament | Doanh số Ornament theo **Product Type** của team, mở ra từng **Sub product type** (trackingis): Acrylic + Wood (Cutout Ornament, Ornament, Ornament 2-layers, Name ornament), Shell, Shaker, Ceramic (Shaped Ornament), Glass, Felt (Felt, Needle Felted), Others (Linen, Flat/Quilted Patchwork, Patchwork, Crochet, Wooden Garland, 2-layer Wood Orn, ball, embroidered, Embroidery Hoop). Orders, quantity, revenue, AOV, tỷ trọng revenue; chart cột chồng theo ngày; filter như Report; export CSV. Bảng phân loại nằm ở `backend/app/services/ornament.py`. Một đơn có nhiều loại được tính ở từng loại, nên tổng các dòng có thể hơi lớn hơn dòng tổng. Quantity cộng tay phần trackingis thiếu (`QUANTITY_FIXES`: Felt Ornament +170 pcs chia đều 01–18/10/2026), chỉ khi không lọc store / seller / designer / keyword; hiện kèm "(+…)". |
+| Etsy › Ornament | Doanh số Ornament theo **Product Type** của team, mở ra từng **Sub product type** (trackingis): Acrylic + Wood (Cutout Ornament, Ornament, Ornament 2-layers, Name ornament), Shell, Shaker, Ceramic (Shaped Ornament), Glass, Felt (Felt, Needle Felted), Others (Linen, Flat/Quilted Patchwork, Patchwork, Crochet, Wooden Garland, 2-layer Wood Orn, ball, embroidered, Embroidery Hoop). Orders, quantity, revenue, AOV, tỷ trọng revenue; chart cột chồng theo ngày; filter như Report; export CSV. Bảng phân loại nằm ở `backend/app/services/ornament.py`. **So với kế hoạch** (sheet "KH Ornament" chọn ở Settings › Plan): Quantity thực tế vs kế hoạch (pcs) theo Product Type, tháng lẻ tính theo số ngày; theo team / store đang lọc; Acrylic + Wood = Acrylic + Wood, "Ornament khác" = Others. Một đơn có nhiều loại được tính ở từng loại, nên tổng các dòng có thể hơi lớn hơn dòng tổng. Quantity cộng tay phần trackingis thiếu (`QUANTITY_FIXES`: Felt Ornament +170 pcs chia đều 01–18/10/2026), chỉ khi không lọc store / seller / designer / keyword; hiện kèm "(+…)". |
 | Etsy › Plan | Kế hoạch theo product: đọc khối bắt đầu ở **cột Q (17)** của sheet kế hoạch (tab "KH theo Product"), **11 product**: PL2/item, Total Sales, Total PL2, tỷ trọng, Sales/mo, Sales/day, PL2 từng tháng + dòng tổng của sheet. Ô KPI, chart theo tháng. Sheet / cột / số product chọn ở Settings › Plan; dữ liệu là bản Sync gần nhất. |
 | Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc. |
 | System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, sheet kế hoạch (Plan), Test connections, Users (mở khoá / đổi role). |
@@ -51,7 +51,7 @@ Tool (chỉ đọc): `whoami`, `etsy_totals`, `etsy_report`, `etsy_ornament`, `f
 cd backend && uv sync && PYTHONPATH=. uv run python scripts/create_user.py you@example.com "Tên" CODE admin
 uv run uvicorn app.main:app --port 8871        # API + MCP
 cd ../web && npm install && npm run dev        # http://localhost:5177 (proxy → 8871)
-cd ../backend && uv run pytest -q              # 57 test
+cd ../backend && uv run pytest -q              # 61 test
 ```
 
 ## Deploy

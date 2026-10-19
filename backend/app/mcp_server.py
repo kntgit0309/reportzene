@@ -100,7 +100,9 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
 @mcp.tool(description=(
     "Ornament sales per product type (Acrylic + Wood, Shell, Shaker, Ceramic, Glass, Felt, Others), each with its sub product "
     "types: total_order, total_quantity, total_revenue, avg_order_value, share of ornament revenue, and per-day rows. "
-    "Same filters as etsy_totals; an order with several ornament types counts in each, so use total for the overall numbers."))
+    "Same filters as etsy_totals; an order with several ornament types counts in each, so use total for the overall numbers. "
+    "With the KH Ornament plan sheet set, product types and total also have plan (pieces for the range, months pro rata), "
+    "plan_month and achieved (quantity / plan); `plan` says its scope or why there is none."))
 def etsy_ornament(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
                   teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,

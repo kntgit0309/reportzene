@@ -4,8 +4,10 @@ import { Download, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
 import OrnamentChart from '../components/report/OrnamentChart.vue'
+import OrnamentPlanChart from '../components/report/OrnamentPlanChart.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
-import { money, num, pct } from '../lib/format'
+import { auth } from '../lib/auth'
+import { dateTime, money, num, pct } from '../lib/format'
 import { downloadCsv, emptyFilters, fetchOrnament, filterParams } from '../lib/report'
 import type { Filters, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
 
@@ -62,22 +64,50 @@ const kpis = computed(() => {
 })
 const subtitle = computed(() => `ZenE ornament sales by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
 
+// --- plan (sheet "KH Ornament"): pieces, compared with the quantity sold ---
+const plan = computed(() => data.value?.plan)
+const hasPlan = computed(() => !!plan.value && !plan.value.error)
+const planSource = computed(() => {
+  const p = plan.value
+  if (!p || p.error) return ''
+  const months = (p.months ?? []).map((m) => (m.days === m.month_days ? m.month : `${m.month} (${m.days}/${m.month_days} days)`))
+  const missing = p.missing_months?.length ? ` · no plan for ${p.missing_months.join(', ')}` : ''
+  return `${p.sheet?.name} · ${p.scope} · ${months.join(', ')}${missing} · synced ${dateTime(p.sheet?.last_synced_at)}`
+})
+const planKpis = computed(() => {
+  const t = total.value
+  const left = t?.plan_month != null ? Math.max(0, t.plan_month - t.total_quantity) : null
+  return [
+    { label: 'Plan to date', value: pcs(t?.plan), hint: 'Months pro rata of the days in the range' },
+    { label: 'Actual', value: pcs(t?.total_quantity), hint: t?.fix_quantity ? `incl. +${num(t.fix_quantity)} added by hand` : 'Quantity sold' },
+    { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved },
+    { label: 'Month plan', value: pcs(t?.plan_month), hint: left == null ? '' : `${pcs(left)} pcs still to sell` },
+  ]
+})
+const pcs = (v: number | null | undefined) => (v == null ? '—' : num(Math.round(v)))
+const bar = (r: number | null | undefined) => (r == null ? 0 : Math.min(100, Math.round(r * 100)))
+const barColor = (r: number | null | undefined) => (r == null ? '#cbd5e1' : r >= 1 ? '#16a34a' : r >= 0.8 ? '#f59e0b' : '#ef4444')
+
 function rowClass({ row }: { row: Row }) {
   return row.children ? 'row-parent' : 'row-child'
 }
 /** Footer = all ornaments together (an order with several types counts once here). */
 function footer(): string[] {
   const t = total.value
-  return t ? ['All ornaments', num(t.total_order), quantity(t), money(t.total_revenue), money(t.avg_order_value), pct(1)] : []
+  if (!t) return []
+  const planCells = hasPlan.value ? [pcs(t.plan), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  return ['All ornaments', num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
 const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
   num(r.total_quantity) + (r.fix_quantity ? ` (+${num(r.fix_quantity)})` : '')
 
 function exportCsv() {
-  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Revenue', 'Avg order value', 'Share']
+  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Plan to date', '% of plan',
+    'Month plan', 'Revenue', 'Avg order value', 'Share']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
-    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.total_revenue, r.avg_order_value, r.share ?? '',
+    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.plan ?? '', r.achieved ?? '', r.plan_month ?? '',
+    r.total_revenue, r.avg_order_value, r.share ?? '',
   ]))
   downloadCsv(`ornament-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
@@ -101,6 +131,25 @@ function exportCsv() {
       <div class="kpi__value">{{ k.value }}</div>
       <div v-if="k.hint" class="mt-1 text-xs text-amber-600">{{ k.hint }}</div>
     </div>
+  </div>
+
+  <div v-if="data" class="section-card">
+    <h3 class="card-title !mb-1">Actual vs plan (pieces)</h3>
+    <div v-if="hasPlan" class="mb-3 text-xs text-muted">{{ planSource }}</div>
+    <el-alert v-if="!hasPlan" type="info" :closable="false" show-icon :title="plan?.error" class="!mt-2">
+      <RouterLink v-if="auth.isAdmin.value && plan?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
+    </el-alert>
+    <template v-else>
+      <div class="mb-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div v-for="k in planKpis" :key="k.label" class="kpi">
+          <div class="kpi__label">{{ k.label }}</div>
+          <div class="kpi__value" :style="'achieved' in k ? { color: barColor(k.achieved) } : undefined">{{ k.value }}</div>
+          <el-progress v-if="'achieved' in k" :percentage="bar(k.achieved)" :color="barColor(k.achieved)" :show-text="false" :stroke-width="6" class="mt-2" />
+          <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
+        </div>
+      </div>
+      <OrnamentPlanChart :groups="data.groups" />
+    </template>
   </div>
 
   <div class="section-card">
@@ -133,6 +182,22 @@ function exportCsv() {
           <span v-if="row.fix_quantity" class="num text-xs text-amber-600" title="Pieces trackingis misses, added by hand"> (+{{ num(row.fix_quantity) }})</span>
         </template>
       </el-table-column>
+      <template v-if="hasPlan">
+        <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>
+          <template #default="{ row }"><span class="num">{{ row.plan == null ? '' : pcs(row.plan) }}</span></template>
+        </el-table-column>
+        <el-table-column label="% of plan" prop="achieved" width="150" sortable>
+          <template #default="{ row }">
+            <div v-if="row.plan != null" class="flex items-center gap-2">
+              <el-progress :percentage="bar(row.achieved)" :color="barColor(row.achieved)" :show-text="false" :stroke-width="6" class="flex-1" />
+              <span class="num w-11 text-right text-xs font-semibold" :style="{ color: barColor(row.achieved) }">{{ pct(row.achieved, 0) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="Month plan" prop="plan_month" width="110" align="right">
+          <template #default="{ row }"><span class="num text-muted">{{ row.plan_month == null ? '' : pcs(row.plan_month) }}</span></template>
+        </el-table-column>
+      </template>
       <el-table-column label="Revenue" prop="total_revenue" width="140" align="right" sortable>
         <template #default="{ row }"><span class="num font-semibold text-slate-900">{{ money(row.total_revenue) }}</span></template>
       </el-table-column>
@@ -147,6 +212,7 @@ function exportCsv() {
     <div class="mt-2 text-xs text-muted">
       Product types group trackingis sub product types (Wooden Garland is in Others). An order with ornaments of several types
       counts in each, so the rows can add up to a little more than the total.
+      <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others.</template>
     </div>
   </div>
 </template>
