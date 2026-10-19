@@ -56,8 +56,7 @@ async function load() {
   try {
     data.value = await fetchFamily(fam.key, applied.value)
     if (!teamsTouched.value) defaultTeams.value = data.value.query.teams
-    const subs = data.value.groups.flatMap((g) => g.children.map((c) => c.name))
-    breakdownParams.value = { ...applied.value, sub_product_types: subs.join(',') }
+    breakdownParams.value = { ...applied.value, sub_product_types: data.value.family.sub_types.join(',') }
   } catch (e) {
     data.value = null
     error.value = (e as Error).message
@@ -91,7 +90,7 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-const subtitle = computed(() => `ZenE ${fam.name.toLowerCase()} sales by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
+const subtitle = computed(() => `ZenE sales of ${fam.plural} by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
 // A family of a single product type (Shirt): the day chart stacks its sub product types
 const oneType = computed(() => (data.value?.groups.length ?? 0) === 1)
 
@@ -201,7 +200,7 @@ function exportCsv() {
     <FamilyChart v-if="showChart && data" :groups="data.groups" :metric="metric" class="mb-3" />
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
-              show-summary :summary-method="footer" :empty-text="`No ${fam.name.toLowerCase()} sales for these filters`" class="w-full">
+              show-summary :summary-method="footer" :empty-text="`No sales of ${fam.plural} for these filters`" class="w-full">
       <el-table-column label="Product type / Sub product type" min-width="260" class-name="tree-cell">
         <template #default="{ row }">{{ row.name }}</template>
       </el-table-column>

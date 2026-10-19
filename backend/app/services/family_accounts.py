@@ -86,6 +86,7 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
     """{accounts: [{shop, team, in_plan, …metrics, plan, plan_month, achieved, children: [product type lines]}], total, plan,
     query}. Stores of the plan come first in sheet order, then stores with sales of the family but no plan line. Children
     are sub product types, without a plan, when the family is a single product type."""
+    family = family_report.resolve(db, family, user)
     q = report.build_query(db, {**params, "view": "date"})
     data = report._call(db, user, report._key(f"{family.key}_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, family, q))
     replacements = settings_store.runtime(db).account_replacements
@@ -96,6 +97,9 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
     s = family_plan.scope(db, family, q, user)
     plans: list[dict[str, Any]] = []
     plan_info: dict[str, Any] = {"error": s["error"]} if "error" in s else {}
+    if not plan_info and not s["parsed"]["per_store"]:
+        plan_info = {"error": f'"{s["source"].name}" plans per product for ZenE as a whole, not per store: '
+                              f'the product type table above compares with it'}
     if not plan_info:
         per_shop = family_plan.shop_plans(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
         plans = per_shop["shops"]

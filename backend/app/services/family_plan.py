@@ -8,6 +8,9 @@ Layout read from the last sync of the family's sheet picked in Settings › Plan
     alone (Flag, Badge Reel), with the month (MM-YYYY) as a column name over the block; or the month itself as the label
     of its only column (Wooden Block). A month without categories counts as the family's `plan_other`;
   - every row below with a shop name and a team is that shop's plan (the per-team and total rows are sums, not read).
+Or, planned per product for ZenE as a whole (KH SP khác): a label row starting "Product" | PL2/item | … with the months
+(MM-YYYY) of Sales/mo, Sales/day and PL2; each product row's first column of a month is its sales that month. Such a plan
+has no shop: it compares with the team-wide view only.
 Plan sales are pieces, compared with the report's quantity. A month partly in the date range counts pro rata of its days.
 """
 import calendar
@@ -25,6 +28,7 @@ from app.services.trackingis import ReportQuery
 
 _MONTH_RE = re.compile(r"^(\d{1,2})-(\d{4})$")
 _BLANK_RE = re.compile(r"^Column \d+$")  # name lark_sheets.unique_header gives a blank header cell
+_LABELS = ("shop name", "product")  # first cell of the label row: a plan per shop, or per product (KH SP khác)
 
 
 def _layout_error(family: Family, message: str) -> AppError:
@@ -44,17 +48,20 @@ def _month_key(text: str) -> str | None:
 
 
 def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict[str, Any]:
-    """{months: ["10-2026", …], shops: [{shop, team, plan: {month: {product type: pcs}}}]} from snapshot rows."""
+    """{months: ["10-2026", …], shops: [{shop, team, plan: {month: {product type: pcs}}}], per_store} from snapshot rows."""
     def cells(row: dict[str, Any]) -> list[str]:
         return [str(row.get(h) or "").strip() for h in header]
 
-    if header and header[0].strip().lower() == "shop name":  # the labels are the header row (blank cells named "Column N")
+    if header and header[0].strip().lower() in _LABELS:  # the labels are the header row (blank cells named "Column N")
         labels, body = ["" if _BLANK_RE.match(h) else h.strip() for h in header], rows
     else:
-        label_at = next((i for i, r in enumerate(rows) if cells(r)[0].lower() == "shop name"), None)
+        label_at = next((i for i, r in enumerate(rows) if cells(r)[0].lower() in _LABELS), None)
         if label_at is None:
-            raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Shop Name" label in its first column')
+            raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Shop Name" (or "Product") label in its '
+                                        'first column')
         labels, body = cells(rows[label_at]), rows[label_at + 1:]
+    if labels[0].lower() == "product":
+        return _parse_products(labels, [cells(r) for r in body], family)
     blocks: list[tuple[str, list[tuple[int, str]]]] = []
     for start, text in enumerate(labels):
         own_month = _month_key(text)
@@ -87,7 +94,27 @@ def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict
             for j, group in cols:
                 per[group] = per.get(group, 0.0) + _pcs(c[j])
         shops.append({"shop": c[0], "team": c[1], "plan": plan})
-    return {"months": [m for m, _ in blocks], "shops": shops}
+    return {"months": [m for m, _ in blocks], "shops": shops, "per_store": True}
+
+
+def _parse_products(labels: list[str], body: list[list[str]], family: Family) -> dict[str, Any]:
+    """A plan per product for ZenE as a whole, as one shop line ("ZenE") without a team."""
+    month_cols: dict[str, int] = {}
+    for j, text in enumerate(labels):  # the first block of months is Sales/mo (then Sales/day, PL2)
+        month = _month_key(text)
+        if month and month not in month_cols:
+            month_cols[month] = j
+    if not month_cols:
+        raise _layout_error(family, f'The {family.name.lower()} plan sheet has no month (MM-YYYY) after its "Product" label')
+    plan: dict[str, dict[str, float]] = {}
+    for c in body:
+        if not c[0]:  # the total row
+            continue
+        group = family.plan_group(c[0])
+        for month, j in month_cols.items():
+            per = plan.setdefault(month, {})
+            per[group] = per.get(group, 0.0) + _pcs(c[j])
+    return {"months": list(month_cols), "shops": [{"shop": "ZenE", "team": "", "plan": plan}], "per_store": False}
 
 
 def replace_accounts(parsed: dict[str, Any], replacements: tuple[tuple[str, str], ...]) -> dict[str, Any]:
@@ -181,6 +208,8 @@ def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dic
         shops = _names(db, user, "shops", q.lists["shops"]) if q.lists.get("shops") else None
     except AppError as exc:
         return {"error": exc.message}
+    if not parsed["per_store"] and (teams or shops):
+        return {"error": f'"{source.name}" plans per product for ZenE as a whole: clear the team and store filters to compare with it'}
     label = f"{len(shops)} store(s)" if shops else (", ".join(sorted(t.title() for t in teams)) if teams else "ZenE")
     return {"source": source, "parsed": parsed, "teams": teams, "shops": shops, "label": label}
 

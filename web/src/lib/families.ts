@@ -1,7 +1,7 @@
 // Product families with their own Etsy page; their product types live in the backend (app/services/families.py).
 // Adding one: an entry here (the route, the Etsy menu item and its Settings › Plan picker follow) and one in the backend.
 import type { Component } from 'vue'
-import { Box, Flag, Postcard, Present } from '@element-plus/icons-vue'
+import { Box, Flag, Grid, Postcard, Present } from '@element-plus/icons-vue'
 import BlanketIcon from '../components/icons/BlanketIcon.vue'
 import ShirtIcon from '../components/icons/ShirtIcon.vue'
 import type { FamilyKey } from './types'
@@ -71,6 +71,17 @@ export const FAMILIES: Record<FamilyKey, Family> = {
     accountParts: 'Sub product type',
     accountsNote: 'a store opens onto its sub product types, actuals only (the plan is for Badge Reel as a whole). Actual: '
       + 'trackingis, badge reel sub product types only.',
+  },
+  others: {
+    key: 'others', name: 'Others', plural: 'other products', icon: Grid,
+    groupsNote: 'Sticker, Scrub cap, Fabric Welcome Sign and Baseball Jersey are the products of KH SP khác; Other products takes '
+      + 'every trackingis sub product type no other report covers (new ones too), its rows per trackingis product type.',
+    planNote: 'KH SP khác plans per product for ZenE as a whole, so it only compares with all ZenE teams and stores.',
+    planSheetHint: 'The "Others" tab (sheet "KH SP khác"): "Product | PL2/item | … | MM-YYYY", one row per product; the first block '
+      + 'of months is the sales per month, in pieces.',
+    accountParts: 'Product type',
+    accountsNote: 'a store opens onto its product types, actuals only (KH SP khác has no per-store plan). Actual: trackingis, '
+      + 'the sub product types of this page only.',
   },
 }
 export const FAMILY_LIST = Object.values(FAMILIES)

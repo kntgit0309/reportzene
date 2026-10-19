@@ -45,7 +45,7 @@ export type Totals = {
 }
 
 /** Product family breakdown (Etsy › Ornament, Shirt, Blanket…): one line per product type, its sub product types as children. */
-export type FamilyKey = 'ornament' | 'shirt' | 'blanket' | 'flag' | 'wooden_block' | 'badge_reel'
+export type FamilyKey = 'ornament' | 'shirt' | 'blanket' | 'flag' | 'wooden_block' | 'badge_reel' | 'others'
 export type FamilyLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null
@@ -68,7 +68,7 @@ export type FamilyDay = { date_at: string; total_order: number; total_quantity: 
 // Sub product types have their own `daily` when the family is a single product type (the chart then stacks them)
 export type FamilyGroup = FamilyLine & { children: (FamilyLine & { daily?: FamilyDay[] })[]; daily: FamilyDay[] }
 export type FamilyReport = {
-  family: { key: FamilyKey; name: string }
+  family: { key: FamilyKey; name: string; sub_types: string[] } // every sub product type the page covers
   total: Omit<Totals, 'date_from' | 'date_to'> & Pick<FamilyLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
   groups: FamilyGroup[]
   fix_note: string | null
