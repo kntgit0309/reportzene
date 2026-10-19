@@ -78,6 +78,8 @@ def test_overview_plan_is_for_zene_as_a_whole(client, member, upstream, business
     data = client.get(f"{V}&teams=13", headers=member).json()["data"]
     assert "ZenE as a whole" in data["plan"]["error"] and "plan" not in data["rows"][0]
     assert "fix_quantity" not in data["rows"][0]  # pieces added by hand are not tied to a team
+    ornament = data["rows"][0]
+    assert ornament["pl2_est"] == ornament["total_quantity"] * 6 and data["total"]["pl2_est"] is not None  # PL2 KT for any filters
     assert data["rows"][0]["name"] == "Ornament"  # still in the plan's order
 
 

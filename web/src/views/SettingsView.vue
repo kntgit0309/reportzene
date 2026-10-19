@@ -12,7 +12,7 @@ import type { AccountReplacement, FamilyKey, Option, Sheet } from '../lib/types'
 
 type Status = {
   trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number
-  plan_sheet_id: number | null; plan_start_column: number; plan_products: number
+  plan_sheet_id: number | null; plan_start_column: number; plan_products: number; pl2_cf_sheet_id: number | null
   family_plan_sheets: Partial<Record<FamilyKey, number>> // product family (Etsy › Ornament…) → its plan sheet
   account_replacements: AccountReplacement[]
 }
@@ -22,6 +22,7 @@ const tab = ref('connections')
 const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
+  pl2_cf_sheet_id: null as number | null | undefined,
   family_plan_sheets: {} as Partial<Record<FamilyKey, number | null>>, account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
 const shops = ref<Option[]>([])
@@ -34,6 +35,7 @@ function fill(s: Status) {
   status.value = s
   Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
+    pl2_cf_sheet_id: s.pl2_cf_sheet_id,
     family_plan_sheets: { ...s.family_plan_sheets }, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
 async function loadTeams() {
@@ -54,6 +56,7 @@ async function save() {
   saving.value = true
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
+      pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0,
       family_plan_sheets: Object.fromEntries(FAMILY_LIST.map((f) => [f.key, form.family_plan_sheets[f.key] ?? 0])),
       account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
     fill(res.data)
@@ -113,6 +116,15 @@ async function save() {
           <div class="-mt-2 mb-4 text-xs text-muted">
             The start column holds "Product", then PL2/item, Total Sales, Total PL2, Tỷ trọng and the month columns (Sales/mo, Sales/day, PL2).
           </div>
+          <el-form-item label="PL2 CF sheet (Etsy › Report)">
+            <el-select v-model="form.pl2_cf_sheet_id" clearable placeholder="No PL2 CF sheet" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              Finance's "Tổng kết PL Monthly" tab (PL2 theo CF): "B.U | TỔNG | MM-YYYY" header, then the KẾ HOẠCH, THỰC ĐẠT and
+              CHÊNH LỆCH rows of B.U ZenE and each team. Etsy › Report compares it with the PL2 estimated from sales (KT).
+            </div>
+          </el-form-item>
           <el-form-item v-for="f in FAMILY_LIST" :key="f.key" :label="`${f.name} plan sheet (Etsy › ${f.name})`">
             <el-select v-model="form.family_plan_sheets[f.key]" clearable :placeholder="`No ${f.name.toLowerCase()} plan`" class="w-full">
               <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />

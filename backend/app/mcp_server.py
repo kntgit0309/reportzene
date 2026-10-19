@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import family_accounts, family_report, overview, report, sheets
+from app.services import family_accounts, family_report, overview, pl2_cf, report, sheets
 from app.services.families import FAMILIES, Family
 
 MAX_ROWS = 200
@@ -111,6 +111,18 @@ def etsy_overview(ctx: Context, date_from: str = "", date_to: str = "", shops: s
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
     return _run(ctx, lambda db, u: overview.overview(db, params, u))
+
+
+@mcp.tool(description=(
+    "PL2 per month, KT vs CF: finance's PL2 from the \"Tổng kết PL Monthly\" sheet (PL2 theo CF: plan, plan_to_date pro rata, "
+    "actual, gap, achieved; per team under `teams` for the whole of ZenE) next to kt, the PL2 estimated from sales (PL2 theo KT = "
+    "quantity × the plan's PL2/item, as etsy_overview's pl2_est) for the same days, and kt_minus_cf. Same filters as etsy_totals; "
+    "teams select the CF lines of those teams; store / seller / designer / keyword filters leave CF out."))
+def etsy_pl2(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+             teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: pl2_cf.pl2_report(db, params, u))
 
 
 def _family_tools(family: Family) -> None:
