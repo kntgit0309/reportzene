@@ -33,7 +33,7 @@ def _data(result):
 def test_mcp_lists_read_only_tools(client, member):
     h = {**HEADERS, "Authorization": f"Bearer {_token(client, member)}"}
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 3, "method": "tools/list"}, headers=h).json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {"whoami", "etsy_totals", "etsy_overview", "etsy_pl2", "etsy_report", "etsy_ornament", "etsy_ornament_accounts", "etsy_shirt",
+    assert {t["name"] for t in tools} == {"whoami", "etsy_totals", "etsy_overview", "etsy_pl2", "etsy_pl2_accounts", "etsy_report", "etsy_ornament", "etsy_ornament_accounts", "etsy_shirt",
                                           "etsy_shirt_accounts", "etsy_blanket", "etsy_blanket_accounts", "etsy_flag", "etsy_flag_accounts",
                                           "etsy_wooden_block", "etsy_wooden_block_accounts", "etsy_badge_reel", "etsy_badge_reel_accounts",
                                           "etsy_others", "etsy_others_accounts",

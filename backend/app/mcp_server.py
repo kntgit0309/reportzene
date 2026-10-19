@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import family_accounts, family_report, overview, pl2_cf, report, sheets
+from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, report, sheets
 from app.services.families import FAMILIES, Family
 
 MAX_ROWS = 200
@@ -123,6 +123,18 @@ def etsy_pl2(ctx: Context, date_from: str = "", date_to: str = "", shops: str = 
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
     return _run(ctx, lambda db, u: pl2_cf.pl2_report(db, params, u))
+
+
+@mcp.tool(description=(
+    "PL2 per account: each account (store) of the KH plans with quantity, kt (PL2 theo KT = its quantity of each plan product × "
+    "that product's PL2/item), cf (finance's PROFIT THỰC ĐẠT of the account, from \"PL Account Etsy_Monthly\", the months the "
+    "range touches) and kt_minus_cf; accounts outside the plans with a PL2 add up under `others` (children list them). Same "
+    "filters as etsy_totals; seller / designer / keyword filters leave CF out."))
+def etsy_pl2_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+                      teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: pl2_accounts.pl2_accounts(db, params, u))
 
 
 def _family_tools(family: Family) -> None:

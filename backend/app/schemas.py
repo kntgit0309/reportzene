@@ -61,6 +61,8 @@ class SettingsIn(BaseModel):
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
     plan_products: int | None = Field(default=None, ge=1, le=100)
     pl2_cf_sheet_id: int | None = Field(default=None, ge=0)  # "Tổng kết PL Monthly" (PL2 theo CF) for Etsy › Report; 0 = none
+    pl2_account_sheet_id: int | None = Field(default=None, ge=0)  # "PL Account Etsy_Monthly" (PL2 CF per account); 0 = none
+    account_list_sheet_id: int | None = Field(default=None, ge=0)  # "Acc đã bàn giao Seller" (names its account rows); 0 = none
     # Plan sheet of each product family given (KH Ornament for Etsy › Ornament…); 0 = none, families left out keep theirs
     family_plan_sheets: dict[str, int] | None = None
     account_replacements: list[AccountReplacement] | None = Field(default=None, max_length=50)  # null keeps, [] clears
