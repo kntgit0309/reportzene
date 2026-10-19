@@ -118,4 +118,4 @@ def test_plan_sheets_saved_per_field_before_still_count(client, db_factory, admi
         assert "ornament_plan_sheet_id" not in s.get(AppSetting, KEY).value
     saved = client.put("/api/v1/settings", json={"family_plan_sheets": {"ornament": 0}}, headers=admin).json()["data"]
     assert saved["family_plan_sheets"] == {"shirt": 5, "blanket": 6}
-    assert client.put("/api/v1/settings", json={"family_plan_sheets": {"flag": 7}}, headers=admin).status_code == 422
+    assert client.put("/api/v1/settings", json={"family_plan_sheets": {"no-such-family": 7}}, headers=admin).status_code == 422
