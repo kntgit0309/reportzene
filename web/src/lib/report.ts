@@ -1,6 +1,6 @@
 // Report Etsy: filters → query string for /report/etsy, date shortcuts, CSV export.
 import { api } from './api'
-import type { Filters, Option, OrnamentReport, ReportPage, ReportRow, Totals, View } from './types'
+import type { Filters, Option, OrnamentAccountsReport, OrnamentReport, ReportPage, ReportRow, Totals, View } from './types'
 
 export const VIEWS: { value: View; label: string }[] = [
   { value: 'date', label: 'Date' },
@@ -62,6 +62,8 @@ const toQuery = (p: Record<string, string | number>) => '?' + new URLSearchParam
 export const fetchReport = (p: Record<string, string | number>) => api.get<ReportPage>(`/report/etsy${toQuery(p)}`).then((r) => r.data)
 export const fetchTotals = (p: Record<string, string | number>) => api.get<Totals>(`/report/etsy/totals${toQuery(p)}`).then((r) => r.data)
 export const fetchOrnament = (p: Record<string, string | number>) => api.get<OrnamentReport>(`/report/etsy/ornament${toQuery(p)}`).then((r) => r.data)
+export const fetchOrnamentAccounts = (p: Record<string, string | number>) =>
+  api.get<OrnamentAccountsReport>(`/report/etsy/ornament/accounts${toQuery(p)}`).then((r) => r.data)
 
 const optionCache = new Map<string, Promise<Option[]>>()
 export function fetchOptions(kind: string): Promise<Option[]> {

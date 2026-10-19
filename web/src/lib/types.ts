@@ -63,7 +63,7 @@ export type OrnamentPlanInfo = {
   shops?: number
 }
 export type OrnamentMetric = 'total_revenue' | 'total_order' | 'total_quantity'
-export type OrnamentDay ={ date_at: string; total_order: number; total_quantity: number; total_revenue: number }
+export type OrnamentDay = { date_at: string; total_order: number; total_quantity: number; total_revenue: number }
 export type OrnamentGroup = OrnamentLine & { children: OrnamentLine[]; daily: OrnamentDay[] }
 export type OrnamentReport = {
   total: Omit<Totals, 'date_from' | 'date_to'> & Pick<OrnamentLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
@@ -73,7 +73,21 @@ export type OrnamentReport = {
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
-export type Option ={ id: number | string; name: string; parent_id?: number | null; type?: string }
+/** Ornament by account: a store's ornament sales (trackingis) next to its line of the KH Ornament plan. */
+export type OrnamentAccountLine = {
+  name?: string // product type, on the breakdown rows
+  total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
+  plan?: number | null; plan_month?: number | null; achieved?: number | null // absent when there is no plan to compare with
+}
+export type OrnamentAccount = OrnamentAccountLine & { shop: string; team: string | null; in_plan: boolean; children: OrnamentAccountLine[] }
+export type OrnamentAccountsReport = {
+  accounts: OrnamentAccount[]
+  total: OrnamentAccountLine
+  plan: OrnamentPlanInfo
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+
+export type Option = { id: number | string; name: string; parent_id?: number | null; type?: string }
 
 export type Filters = {
   dateRange: [string, string]

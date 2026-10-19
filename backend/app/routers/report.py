@@ -8,7 +8,7 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import ornament, report
+from app.services import ornament, ornament_accounts, report
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
 OPTION_KINDS = "^(shops|sellers|designers|product_types|sub_product_types|teams)$"
@@ -36,6 +36,12 @@ def etsy_totals(request: Request, db: Session = Depends(get_db), user: User = De
 def ornament_report(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Ornament sales per product type (Etsy › Ornament), same filters as the report."""
     return ok(ornament.ornament_report(db, _params(request), user), request)
+
+
+@router.get("/ornament/accounts")
+def ornament_accounts_report(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Ornament sales per store next to the store's line of the KH Ornament plan (Etsy › Ornament)."""
+    return ok(ornament_accounts.accounts_report(db, _params(request), user), request)
 
 
 @router.get("/options/{kind}")
