@@ -18,6 +18,7 @@ export const router = createRouter({
       children: [
         { path: '', redirect: HOME },
         { path: 'etsy/report', component: () => import('./views/EtsyReportView.vue'), meta: { title: 'Report Etsy', group: 'Etsy' } },
+        { path: 'etsy/ornament', component: () => import('./views/OrnamentView.vue'), meta: { title: 'Ornament report', group: 'Etsy' } },
         { path: 'etsy/plan', component: () => import('./views/PlanView.vue'), meta: { title: 'Plan by product', group: 'Etsy' } },
         { path: 'sheets', component: () => import('./views/SheetsView.vue'), meta: { title: 'Team sheets', group: 'Lark' } },
         { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings', group: 'System', adminOnly: true } },

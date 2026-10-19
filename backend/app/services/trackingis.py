@@ -26,6 +26,18 @@ TEST_TRANSPORT: httpx.BaseTransport | None = None  # tests swap in a MockTranspo
 USER_AGENT = "reportzene/0.1 (+https://reportzene.trackingis.info)"  # Cloudflare blocks the default python agents
 
 
+def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Totals of per-day rows: total_order, total_quantity, total, sale_tax, total_revenue, avg_order_value, days."""
+    sums = dict.fromkeys(SUM_FIELDS, 0.0)
+    for row in rows:
+        for f in SUM_FIELDS:
+            sums[f] += float(row.get(f) or 0)
+    out: dict[str, Any] = {f: round(v, 2) for f, v in sums.items()}
+    out["total_order"], out["total_quantity"], out["days"] = int(sums["total_order"]), int(sums["total_quantity"]), len(rows)
+    out["avg_order_value"] = round(sums["total_revenue"] / sums["total_order"], 2) if sums["total_order"] else 0.0
+    return out
+
+
 class TrackingisError(Exception):
     """Readable error for the UI / MCP (missing token, expired token, upstream down)."""
 
@@ -100,25 +112,23 @@ class TrackingisClient:
                 "paging": {"page": paging.get("current_page", q.page), "per_page": paging.get("per_page", q.per_page),
                            "total": paging.get("total", 0), "last_page": paging.get("last_page", 1)}}
 
-    def totals(self, q: ReportQuery) -> dict[str, Any]:
-        """Summary cards for the same filters: the sum of the per-day rows (trackingis' own /etsy/report/totals answers 500).
+    def daily(self, q: ReportQuery) -> list[dict[str, Any]]:
+        """Per-day rows of the date view for the whole range, oldest first.
 
         The date view returns at most 31 days per page whatever per_page says, so long ranges are paged through."""
-        sums = dict.fromkeys(SUM_FIELDS, 0.0)
-        days, page = 0, 1
+        rows: list[dict[str, Any]] = []
+        page = 1
         while page <= MAX_TOTAL_PAGES:
             got = self.report(ReportQuery(q.date_from, q.date_to, "date", page, MAX_PER_PAGE, "date_at", "asc", q.lists, q.texts))
-            for row in got["rows"]:
-                days += 1
-                for f in SUM_FIELDS:
-                    sums[f] += float(row.get(f) or 0)
+            rows += got["rows"]
             if page >= int(got["paging"].get("last_page") or 1):
                 break
             page += 1
-        out: dict[str, Any] = {f: round(v, 2) for f, v in sums.items()}
-        out["total_order"], out["total_quantity"], out["days"] = int(sums["total_order"]), int(sums["total_quantity"]), days
-        out["avg_order_value"] = round(sums["total_revenue"] / sums["total_order"], 2) if sums["total_order"] else 0.0
-        return out
+        return rows
+
+    def totals(self, q: ReportQuery) -> dict[str, Any]:
+        """Summary cards for the same filters: the sum of the per-day rows (trackingis' own /etsy/report/totals answers 500)."""
+        return summarize(self.daily(q))
 
     def options(self, kind: str) -> list[dict[str, Any]]:
         """Filter dropdown values: shops, sellers, designers, product_types, sub_product_types, teams."""
