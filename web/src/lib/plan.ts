@@ -17,6 +17,8 @@ export function signedPcs(v: number | null | undefined): string {
 }
 
 export const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
+/** The same as a colour, where a utility class would lose to a component style (KPI values). */
+export const gapColor = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? undefined : v < 0 ? '#dc2626' : '#16a34a')
 
 /** Width of a % of plan bar (capped at 100) and its colour: green from 100 %, amber from 80 %, red below. */
 export const bar = (r: number | null | undefined) => (r == null ? 0 : Math.min(100, Math.round(r * 100)))
