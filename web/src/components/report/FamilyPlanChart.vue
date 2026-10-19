@@ -17,7 +17,7 @@ function options(): Highcharts.Options {
     xAxis: { categories: props.groups.map((g) => g.name), crosshair: true },
     yAxis: { title: { text: 'Pieces' } },
     tooltip: { shared: true, valueDecimals: 0 },
-    plotOptions: { column: { borderRadius: 3, groupPadding: 0.12 } },
+    plotOptions: { column: { borderRadius: 3, groupPadding: 0.12, maxPointWidth: 120 } }, // Shirt's single pair stays column-sized
     series: [
       { type: 'column', name: 'Plan to date', color: '#cbd5e1', data: props.groups.map((g) => g.plan ?? 0) },
       {
