@@ -48,13 +48,15 @@ export type Totals = {
 export type OrnamentLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null
+  fix_quantity?: number // pieces trackingis misses, added by hand (already inside total_quantity)
 }
 export type OrnamentMetric = 'total_revenue' | 'total_order' | 'total_quantity'
 export type OrnamentDay ={ date_at: string; total_order: number; total_quantity: number; total_revenue: number }
 export type OrnamentGroup = OrnamentLine & { children: OrnamentLine[]; daily: OrnamentDay[] }
 export type OrnamentReport = {
-  total: Omit<Totals, 'date_from' | 'date_to'>
+  total: Omit<Totals, 'date_from' | 'date_to'> & { fix_quantity?: number }
   groups: OrnamentGroup[]
+  fix_note: string | null
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
