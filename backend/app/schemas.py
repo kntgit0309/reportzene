@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.services.families import FAMILIES
+
 Role = Literal["member", "admin"]
 
 
@@ -28,7 +30,7 @@ class LoginIn(BaseModel):
 
 
 class AccountReplacement(BaseModel):
-    """A suspended store and the store that takes over its line of the plans (and its sales) on Etsy › Ornament / Shirt."""
+    """A suspended store and the store that takes over its line of the plans (and its sales) on Etsy › Ornament, Shirt…"""
 
     suspended: str = Field(min_length=1, max_length=120)
     replacement: str = Field(min_length=1, max_length=120)
@@ -57,9 +59,19 @@ class SettingsIn(BaseModel):
     plan_sheet_id: int | None = Field(default=None, ge=0)  # 0 = no plan sheet
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
     plan_products: int | None = Field(default=None, ge=1, le=100)
-    ornament_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Ornament sheet for Etsy › Ornament; 0 = none
-    shirt_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Shirt sheet for Etsy › Shirt; 0 = none
+    # Plan sheet of each product family given (KH Ornament for Etsy › Ornament…); 0 = none, families left out keep theirs
+    family_plan_sheets: dict[str, int] | None = None
     account_replacements: list[AccountReplacement] | None = Field(default=None, max_length=50)  # null keeps, [] clears
+
+    @field_validator("family_plan_sheets")
+    @classmethod
+    def _known_families(cls, v: dict[str, int] | None) -> dict[str, int] | None:
+        for key, sheet_id in (v or {}).items():
+            if key not in FAMILIES:
+                raise ValueError(f"No product family {key!r} (one of {', '.join(FAMILIES)})")
+            if sheet_id < 0:
+                raise ValueError("Sheet id must be 0 (none) or a team sheet id")
+        return v
 
 
 LARK_URL = r"^https://[A-Za-z0-9.\-]+\.(larksuite|feishu)\.(com|cn)/"

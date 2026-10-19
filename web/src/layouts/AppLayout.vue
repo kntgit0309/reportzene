@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Aim, DataLine, Document, Expand, Fold, Present, Setting } from '@element-plus/icons-vue'
+import { Aim, DataLine, Document, Expand, Fold, Setting } from '@element-plus/icons-vue'
 import AgentTokens from '../components/AgentTokens.vue'
-import ShirtIcon from '../components/icons/ShirtIcon.vue'
 import { auth } from '../lib/auth'
+import { FAMILY_LIST } from '../lib/families'
 
 const MOBILE_PX = 768
 const route = useRoute()
@@ -17,8 +17,7 @@ const tokensOpen = ref(false)
 const GROUPS = [
   { title: 'Etsy', items: [
     { path: '/etsy/report', title: 'Report', icon: DataLine },
-    { path: '/etsy/ornament', title: 'Ornament', icon: Present },
-    { path: '/etsy/shirt', title: 'Shirt', icon: ShirtIcon },
+    ...FAMILY_LIST.map((f) => ({ path: `/etsy/${f.key}`, title: f.name, icon: f.icon })),
     { path: '/etsy/plan', title: 'Plan', icon: Aim },
   ] },
   { title: 'Lark', items: [{ path: '/sheets', title: 'Team sheets', icon: Document }] },
@@ -76,7 +75,7 @@ async function logout() {
           </template>
         </el-dropdown>
       </header>
-      <!-- keyed by path: Etsy › Ornament and Etsy › Shirt are one page component, each path gets its own page -->
+      <!-- keyed by path: Etsy › Ornament, Shirt, Blanket… are one page component, each path gets its own page -->
       <main class="flex-1 px-4 py-5 sm:px-6"><RouterView :key="route.path" /></main>
       <AgentTokens v-model="tokensOpen" />
     </div>

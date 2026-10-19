@@ -1,18 +1,19 @@
-"""Product families with their own Etsy page (Etsy › Ornament, Etsy › Shirt): the team's grouping of trackingis sub product
-types into product types, and how the family's plan sheet (KH Ornament, KH Shirt) maps onto it."""
+"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket): the team's grouping of trackingis sub
+product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt, KH Blanket) maps onto it.
+Adding a family: an entry here and in web/src/lib/families.ts; its plan sheet is picked in Settings › Plan."""
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 
 @dataclass(frozen=True)
 class Family:
-    key: str  # URL and cache key: /report/etsy/<key>
+    key: str  # URL, cache key, Settings › Plan key and MCP tool name: /report/etsy/<key>, etsy_<key>
     name: str
     # Product type → trackingis sub product types (names exactly as trackingis lists them)
     groups: tuple[tuple[str, tuple[str, ...]], ...]
-    plan_setting: str  # Settings › Plan field holding the family's plan sheet id
     plan_groups: dict[str, str]  # plan category (lower case) → product type; any other category goes to `plan_other`
     plan_other: str
+    plan_note: str  # how the plan's categories map onto the product types, for agents (MCP)
     # Quantity trackingis misses, added by hand: sub product type → {day: pieces}; only in the team-wide view
     quantity_fixes: dict[str, dict[str, int]] = field(default_factory=dict)
     fix_note: str | None = None
@@ -45,11 +46,11 @@ ORNAMENT = Family(
         ("Others", ("Linen ornament", "Flat Patchwork Ornament", "Quilted Patchwork Ornament", "Patchwork Ornament", "Crochet Ornament",
                     "Wooden Garland", "2-layer Wood Orn", "ball ornament", "embroidered ornament", "Embroidery Hoop Ornament")),
     ),
-    plan_setting="ornament_plan_sheet_id",
     # trackingis cannot tell acrylic from wood ornaments apart
     plan_groups={"acrylic": "Acrylic + Wood", "wood": "Acrylic + Wood", "shaker": "Shaker", "ceramic": "Ceramic", "glass": "Glass",
                  "shell": "Shell", "felt": "Felt", "ornament khác": "Others"},
     plan_other="Others",
+    plan_note='the plan\'s Acrylic and Wood count together as "Acrylic + Wood", "Ornament khác" as Others',
     # trackingis counts a multi-piece Felt Ornament as 1: 170 pcs missing over 01–18/10/2026
     quantity_fixes={"Felt Ornament": _spread(170, date(2026, 10, 1), 18)},
     fix_note="includes pieces trackingis misses, added by hand (Felt Ornament: +170 pcs over 01–18/10/2026)",
@@ -60,9 +61,19 @@ SHIRT = Family(
     key="shirt",
     name="Shirt",
     groups=(("Shirt", ("Shirt", "Sweatshirt", "No Brand Shirt", "Patchwork Shirt", "Comfort Color", "Baby Tee")),),
-    plan_setting="shirt_plan_sheet_id",
     plan_groups={},
     plan_other="Shirt",
+    plan_note="the plan's T-shirt and Sweatshirt count together as Shirt",
 )
 
-FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT)}
+# Product types named as in KH Blanket, each sold on trackingis as one sub product type
+BLANKET = Family(
+    key="blanket",
+    name="Blanket",
+    groups=(("Velveteen", ("Blanket",)), ("Woven", ("Woven Blanket",)), ("Quilted", ("Quilted Blanket",))),
+    plan_groups={"velveteen": "Velveteen", "woven": "Woven", "quilted": "Quilted"},
+    plan_other="Others",
+    plan_note="the plan's Velveteen, Woven and Quilted are the product types of the same name",
+)
+
+FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET)}

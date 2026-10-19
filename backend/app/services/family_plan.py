@@ -152,7 +152,7 @@ def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dic
     """{source, parsed, teams, shops, label}: the family's plan sheet and the teams / stores the report's filters keep,
     or {"error": why there is no plan to compare with}."""
     rt = settings_store.runtime(db)
-    sheet_id = getattr(rt, family.plan_setting)
+    sheet_id = rt.family_plan_sheets.get(family.key)
     if sheet_id is None:
         return {"error": f"No {family.name.lower()} plan sheet yet: an admin picks it in Settings → Plan"}
     source = db.get(SheetSource, sheet_id)

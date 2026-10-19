@@ -2,7 +2,7 @@
 import base64
 import hashlib
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -15,7 +15,8 @@ KEY = "runtime"
 SECRET_FIELDS = ("trackingis_token", "lark_app_secret")
 PLAIN_FIELDS = ("lark_app_id",)
 LIST_FIELDS = ("default_teams",)
-INT_FIELDS = ("plan_sheet_id", "plan_start_column", "plan_products", "ornament_plan_sheet_id", "shirt_plan_sheet_id")  # sheet ids: 0 = none
+INT_FIELDS = ("plan_sheet_id", "plan_start_column", "plan_products")  # sheet id: 0 = none
+LEGACY_PLAN_FAMILIES = ("ornament", "shirt")  # saved as <family>_plan_sheet_id before family_plan_sheets
 SECRET_FILE = BASE_DIR / "data" / "secret.key"
 
 
@@ -28,8 +29,7 @@ class Runtime:
     plan_sheet_id: int | None = None
     plan_start_column: int = 17
     plan_products: int = 11
-    ornament_plan_sheet_id: int | None = None
-    shirt_plan_sheet_id: int | None = None
+    family_plan_sheets: dict[str, int] = field(default_factory=dict)  # product family (Etsy › Ornament…) → its plan sheet id
     account_replacements: tuple[tuple[str, str], ...] = ()  # (suspended store, store that takes over its plan and sales)
 
     @property
@@ -94,10 +94,17 @@ def runtime(db: Session) -> Runtime:
         plan_sheet_id=int(s.get("plan_sheet_id") or 0) or None,
         plan_start_column=int(s.get("plan_start_column") or settings.plan_start_column),
         plan_products=int(s.get("plan_products") or settings.plan_products),
-        ornament_plan_sheet_id=int(s.get("ornament_plan_sheet_id") or 0) or None,
-        shirt_plan_sheet_id=int(s.get("shirt_plan_sheet_id") or 0) or None,
+        family_plan_sheets=_plan_sheets(s),
         account_replacements=tuple((r["suspended"], r["replacement"]) for r in s.get("account_replacements") or []),
     )
+
+
+def _plan_sheets(s: dict[str, Any]) -> dict[str, int]:
+    """Family → plan sheet id; settings saved before family_plan_sheets kept one field per family."""
+    saved = s.get("family_plan_sheets")
+    if saved is None:
+        saved = {key: s.get(f"{key}_plan_sheet_id") for key in LEGACY_PLAN_FAMILIES}
+    return {key: int(v) for key, v in saved.items() if int(v or 0)}
 
 
 def _hint(value: str) -> str:
@@ -109,7 +116,7 @@ def status(db: Session) -> dict[str, Any]:
     return {"trackingis_token": _hint(rt.trackingis_token), "trackingis_url": settings.trackingis_url,
             "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret),
             "plan_sheet_id": rt.plan_sheet_id, "plan_start_column": rt.plan_start_column, "plan_products": rt.plan_products,
-            "ornament_plan_sheet_id": rt.ornament_plan_sheet_id, "shirt_plan_sheet_id": rt.shirt_plan_sheet_id,
+            "family_plan_sheets": rt.family_plan_sheets,
             "account_replacements": [{"suspended": old, "replacement": new} for old, new in rt.account_replacements]}
 
 
@@ -131,6 +138,11 @@ def save(db: Session, changes: dict[str, Any]) -> None:
     for f in INT_FIELDS:
         if changes.get(f) is not None:
             value[f] = int(changes[f])
+    if changes.get("family_plan_sheets") is not None:  # only the families given change; 0 = no plan sheet
+        sheets = {**_plan_sheets(value), **{key: int(v) for key, v in changes["family_plan_sheets"].items()}}
+        value["family_plan_sheets"] = {key: v for key, v in sheets.items() if v}
+        for key in LEGACY_PLAN_FAMILIES:
+            value.pop(f"{key}_plan_sheet_id", None)
     if changes.get("account_replacements") is not None:  # the whole list is replaced; [] clears it
         value["account_replacements"] = [{"suspended": r["suspended"].strip(), "replacement": r["replacement"].strip()}
                                          for r in changes["account_replacements"]]

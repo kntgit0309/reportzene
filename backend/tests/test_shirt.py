@@ -72,8 +72,8 @@ def plan_sheet(client, db_factory, admin):
                             header=HEADER, rows=ROWS, row_count=len(ROWS))
         s.add(sheet)
         s.commit()
-    saved = client.put("/api/v1/settings", json={"shirt_plan_sheet_id": sheet.id}, headers=admin).json()["data"]
-    assert saved["shirt_plan_sheet_id"] == sheet.id and saved["ornament_plan_sheet_id"] is None
+    saved = client.put("/api/v1/settings", json={"family_plan_sheets": {"shirt": sheet.id}}, headers=admin).json()["data"]
+    assert saved["family_plan_sheets"] == {"shirt": sheet.id}
     return sheet
 
 
@@ -109,7 +109,7 @@ def test_shirt_report_is_one_product_type_opening_onto_its_sub_types(client, mem
 def test_shirt_plan_sheet_is_its_own_setting(client, member, upstream, plan_sheet):
     ornament = client.get("/api/v1/report/etsy/ornament?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
     assert "No ornament plan sheet" in ornament["plan"]["error"]
-    assert client.get("/api/v1/report/etsy/blanket", headers=member).status_code == 422
+    assert client.get("/api/v1/report/etsy/no-such-family", headers=member).status_code == 422
 
 
 def test_shirt_accounts_open_onto_sub_product_types(client, admin, member, upstream, plan_sheet):
