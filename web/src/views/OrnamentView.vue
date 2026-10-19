@@ -10,7 +10,7 @@ import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
 import { auth } from '../lib/auth'
 import { dateTime, money, num, pct } from '../lib/format'
-import { bar, barColor, gapClass, gapOf, pcs, signedPcs } from '../lib/plan'
+import { bar, barColor, gapClass, gapColor, gapOf, pcs, signedPcs } from '../lib/plan'
 import { downloadCsv, emptyFilters, fetchOrnament, fetchOrnamentAccounts, filterParams } from '../lib/report'
 import type { Filters, OrnamentAccountsReport, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
 
@@ -101,10 +101,13 @@ const planSource = computed(() => {
 const planKpis = computed(() => {
   const t = total.value
   const left = t?.plan_month != null ? Math.max(0, t.plan_month - t.total_quantity) : null
+  const gap = t ? gapOf(t) : undefined
   return [
     { label: 'Plan to date', value: pcs(t?.plan), hint: 'Months pro rata of the days in the range' },
     { label: 'Actual', value: pcs(t?.total_quantity), hint: t?.fix_quantity ? `incl. +${num(t.fix_quantity)} added by hand` : 'Quantity sold' },
-    { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved },
+    { label: 'Gap', value: signedPcs(gap) || '—', color: gapColor(gap),
+      hint: `Actual − Plan to date${gap == null || Math.round(gap) === 0 ? '' : gap < 0 ? ': behind plan' : ': ahead of plan'}` },
+    { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) },
     { label: 'Month plan', value: pcs(t?.plan_month), hint: left == null ? '' : `${pcs(left)} pcs still to sell` },
   ]
 })
@@ -162,10 +165,10 @@ function exportCsv() {
       <RouterLink v-if="auth.isAdmin.value && plan?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
     </el-alert>
     <template v-else>
-      <div class="mb-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <div v-for="k in planKpis" :key="k.label" class="kpi">
           <div class="kpi__label">{{ k.label }}</div>
-          <div class="kpi__value" :style="'achieved' in k ? { color: barColor(k.achieved) } : undefined">{{ k.value }}</div>
+          <div class="kpi__value" :style="k.color ? { color: k.color } : undefined">{{ k.value }}</div>
           <el-progress v-if="'achieved' in k" :percentage="bar(k.achieved)" :color="barColor(k.achieved)" :show-text="false" :stroke-width="6" class="mt-2" />
           <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
         </div>
