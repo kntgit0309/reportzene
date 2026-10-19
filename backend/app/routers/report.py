@@ -1,4 +1,4 @@
-"""Etsy sale report (ZenE): rows per view, summary cards, the ornament breakdown and filter options, read from trackingis."""
+"""Etsy sale report (ZenE): rows per view, summary cards, the ornament / shirt breakdowns and filter options, read from trackingis."""
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Request
@@ -8,10 +8,12 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import ornament, ornament_accounts, report
+from app.services import family_accounts, family_report, report
+from app.services.families import FAMILIES
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
 OPTION_KINDS = "^(shops|sellers|designers|product_types|sub_product_types|teams)$"
+FAMILY_KEYS = f"^({'|'.join(FAMILIES)})$"
 
 
 def _params(request: Request) -> dict[str, Any]:
@@ -32,19 +34,21 @@ def etsy_totals(request: Request, db: Session = Depends(get_db), user: User = De
     return ok(report.etsy_totals(db, _params(request), user), request)
 
 
-@router.get("/ornament")
-def ornament_report(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    """Ornament sales per product type (Etsy › Ornament), same filters as the report."""
-    return ok(ornament.ornament_report(db, _params(request), user), request)
-
-
-@router.get("/ornament/accounts")
-def ornament_accounts_report(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    """Ornament sales per store next to the store's line of the KH Ornament plan (Etsy › Ornament)."""
-    return ok(ornament_accounts.accounts_report(db, _params(request), user), request)
-
-
 @router.get("/options/{kind}")
 def options(request: Request, kind: str = Path(pattern=OPTION_KINDS), db: Session = Depends(get_db),
             user: User = Depends(current_user)) -> dict[str, Any]:
     return ok(report.filter_options(db, kind, user), request)
+
+
+@router.get("/{family}")
+def family_sales(request: Request, family: str = Path(pattern=FAMILY_KEYS), db: Session = Depends(get_db),
+                 user: User = Depends(current_user)) -> dict[str, Any]:
+    """Sales of a product family per product type (Etsy › Ornament, Etsy › Shirt), same filters as the report."""
+    return ok(family_report.family_report(db, FAMILIES[family], _params(request), user), request)
+
+
+@router.get("/{family}/accounts")
+def family_accounts_report(request: Request, family: str = Path(pattern=FAMILY_KEYS), db: Session = Depends(get_db),
+                           user: User = Depends(current_user)) -> dict[str, Any]:
+    """Sales of a product family per store next to the store's line of the family's plan (KH Ornament, KH Shirt)."""
+    return ok(family_accounts.accounts_report(db, FAMILIES[family], _params(request), user), request)

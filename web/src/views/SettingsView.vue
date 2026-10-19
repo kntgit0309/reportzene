@@ -12,6 +12,7 @@ import type { AccountReplacement, Option, Sheet } from '../lib/types'
 type Status = {
   trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; ornament_plan_sheet_id: number | null
+  shirt_plan_sheet_id: number | null
   account_replacements: AccountReplacement[]
 }
 type Check = { ok: boolean; message: string }
@@ -20,7 +21,8 @@ const tab = ref('connections')
 const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
-  ornament_plan_sheet_id: null as number | null | undefined, account_replacements: [] as AccountReplacement[] })
+  ornament_plan_sheet_id: null as number | null | undefined, shirt_plan_sheet_id: null as number | null | undefined,
+  account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
 const shops = ref<Option[]>([])
 const sheets = ref<Sheet[]>([])
@@ -32,7 +34,8 @@ function fill(s: Status) {
   status.value = s
   Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
-    ornament_plan_sheet_id: s.ornament_plan_sheet_id, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
+    ornament_plan_sheet_id: s.ornament_plan_sheet_id, shirt_plan_sheet_id: s.shirt_plan_sheet_id,
+    account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
 async function loadTeams() {
   try { teams.value = (await fetchOptions('teams')).filter((t) => t.type !== 'bu') } catch { teams.value = [] }
@@ -52,7 +55,7 @@ async function save() {
   saving.value = true
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
-      ornament_plan_sheet_id: form.ornament_plan_sheet_id ?? 0,
+      ornament_plan_sheet_id: form.ornament_plan_sheet_id ?? 0, shirt_plan_sheet_id: form.shirt_plan_sheet_id ?? 0,
       account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
     fill(res.data)
     ElMessage.success(res.meta.message)
@@ -119,7 +122,13 @@ async function save() {
               The "KH Ornament" tab: a "Shop Name | Team" label row, then per month a "Total" column and the categories, in pieces.
             </div>
           </el-form-item>
-          <el-form-item label="Account replacements (Etsy › Ornament)">
+          <el-form-item label="Shirt plan sheet (Etsy › Shirt)">
+            <el-select v-model="form.shirt_plan_sheet_id" clearable placeholder="No shirt plan" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">The "KH Shirt" tab, same layout; its T-shirt and Sweatshirt columns count together as Shirt.</div>
+          </el-form-item>
+          <el-form-item label="Account replacements (Etsy › Ornament, Shirt)">
             <div class="w-full space-y-2">
               <div v-for="(r, i) in form.account_replacements" :key="i" class="flex items-center gap-2">
                 <el-input v-model="r.suspended" placeholder="Suspended store, as in the plan sheet" class="flex-1" />
@@ -132,7 +141,8 @@ async function save() {
               <el-button size="small" :icon="Plus" @click="form.account_replacements.push({ suspended: '', replacement: '' })">Add replacement</el-button>
             </div>
             <div class="text-xs text-muted">
-              When a store is suspended, the store that takes over gets its line of the ornament plan, and the suspended store's sales count in its row.
+              When a store is suspended, the store that takes over gets its line of the ornament and shirt plans, and the suspended
+              store's sales count in its row.
             </div>
           </el-form-item>
 

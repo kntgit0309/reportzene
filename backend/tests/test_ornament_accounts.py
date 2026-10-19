@@ -5,11 +5,12 @@ import pytest
 
 from app.models import SheetSource
 from app.services import report, trackingis
-from app.services.ornament import GROUPS
+from app.services.families import ORNAMENT
 from tests.test_ornament_plan import HEADER, ROWS
 from tests.test_report import _save_token
 
 A = "/api/v1/report/etsy/ornament/accounts"
+GROUPS = ORNAMENT.groups
 SHOPS = [("PunGanterdesign", 1, 3), ("OnebyHenry", 2, 2), ("NewShop", 9, 1)]  # name, id, orders per sub product type
 
 
@@ -106,9 +107,9 @@ def test_replacement_takes_the_suspended_stores_plan_line_and_sales(client, admi
 
 
 def test_replacing_with_a_store_of_the_plan_adds_the_two_lines_up():
-    from app.services.ornament_plan import parse, plan_for, replace_accounts
+    from app.services.family_plan import parse, plan_for, replace_accounts
     from tests.test_ornament_plan import HEADER as H, ROWS as R
-    plan = replace_accounts(parse(H, R), (("PunGanterdesign", "Daisyfloralsshop"),))
+    plan = replace_accounts(parse(H, R, ORNAMENT), (("PunGanterdesign", "Daisyfloralsshop"),))
     assert [s["shop"] for s in plan["shops"]] == ["Daisyfloralsshop", "OnebyHenry"]
     assert plan["shops"][0]["replaces"] == ["PunGanterdesign"]
     assert plan_for(plan, "2026-10-01", "2026-10-31", shops={"daisyfloralsshop"})["groups"]["Acrylic + Wood"]["plan"] == 295 + 70

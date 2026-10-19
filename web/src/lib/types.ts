@@ -44,8 +44,9 @@ export type Totals = {
   avg_order_value: number; days: number; date_from: string; date_to: string
 }
 
-/** Ornament breakdown (Etsy › Ornament): one line per product type, its sub product types as children. */
-export type OrnamentLine = {
+/** Product family breakdown (Etsy › Ornament, Etsy › Shirt): one line per product type, its sub product types as children. */
+export type FamilyKey = 'ornament' | 'shirt'
+export type FamilyLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null
   fix_quantity?: number // pieces trackingis misses, added by hand (already inside total_quantity)
@@ -53,8 +54,8 @@ export type OrnamentLine = {
   plan_month?: number // planned pieces of the whole months the range touches
   achieved?: number | null // total_quantity / plan
 }
-/** Where the ornament plan comes from, or why there is none for these filters. */
-export type OrnamentPlanInfo = {
+/** Where the family's plan comes from, or why there is none for these filters. */
+export type FamilyPlanInfo = {
   error?: string
   sheet?: { id: number; name: string; tab_title: string; last_synced_at: string | null }
   scope?: string
@@ -62,32 +63,34 @@ export type OrnamentPlanInfo = {
   missing_months?: string[]
   shops?: number
 }
-export type OrnamentMetric = 'total_revenue' | 'total_order' | 'total_quantity'
-export type OrnamentDay = { date_at: string; total_order: number; total_quantity: number; total_revenue: number }
-export type OrnamentGroup = OrnamentLine & { children: OrnamentLine[]; daily: OrnamentDay[] }
-export type OrnamentReport = {
-  total: Omit<Totals, 'date_from' | 'date_to'> & Pick<OrnamentLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
-  groups: OrnamentGroup[]
+export type FamilyMetric = 'total_revenue' | 'total_order' | 'total_quantity'
+export type FamilyDay = { date_at: string; total_order: number; total_quantity: number; total_revenue: number }
+// Sub product types have their own `daily` when the family is a single product type (the chart then stacks them)
+export type FamilyGroup = FamilyLine & { children: (FamilyLine & { daily?: FamilyDay[] })[]; daily: FamilyDay[] }
+export type FamilyReport = {
+  family: { key: FamilyKey; name: string }
+  total: Omit<Totals, 'date_from' | 'date_to'> & Pick<FamilyLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
+  groups: FamilyGroup[]
   fix_note: string | null
-  plan: OrnamentPlanInfo
+  plan: FamilyPlanInfo
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
-/** Ornament by account: a store's ornament sales (trackingis) next to its line of the KH Ornament plan. */
-export type OrnamentAccountLine = {
-  name?: string // product type, on the breakdown rows
+/** By account: a store's sales of the family (trackingis) next to its line of the family's plan (KH Ornament, KH Shirt). */
+export type FamilyAccountLine = {
+  name?: string // product type (sub product type for a single-type family), on the breakdown rows
   total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
   plan?: number | null; plan_month?: number | null; achieved?: number | null // absent when there is no plan to compare with
 }
-export type OrnamentAccount = OrnamentAccountLine & {
-  shop: string; team: string | null; in_plan: boolean; children: OrnamentAccountLine[]
+export type FamilyAccount = FamilyAccountLine & {
+  shop: string; team: string | null; in_plan: boolean; children: FamilyAccountLine[]
   replaces: string[] // suspended stores whose plan line and sales this store took over (Settings › Plan)
 }
 export type AccountReplacement = { suspended: string; replacement: string }
-export type OrnamentAccountsReport = {
-  accounts: OrnamentAccount[]
-  total: OrnamentAccountLine
-  plan: OrnamentPlanInfo
+export type FamilyAccountsReport = {
+  accounts: FamilyAccount[]
+  total: FamilyAccountLine
+  plan: FamilyPlanInfo
   query: { date_from: string; date_to: string; teams: string[] }
 }
 

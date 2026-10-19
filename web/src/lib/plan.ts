@@ -1,4 +1,4 @@
-// Plan vs actual (Etsy › Ornament): pieces, gap, % of plan bars — shared by the product type and account tables.
+// Plan vs actual (Etsy › Ornament, Etsy › Shirt): pieces, gap, % of plan bars — shared by the product type and account tables.
 import { num } from './format'
 
 /** Pieces, rounded: 1326.9 → "1,327". */

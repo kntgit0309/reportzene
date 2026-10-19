@@ -28,7 +28,7 @@ class LoginIn(BaseModel):
 
 
 class AccountReplacement(BaseModel):
-    """A suspended store and the store that takes over its line of the ornament plan (and its sales) on Etsy › Ornament."""
+    """A suspended store and the store that takes over its line of the plans (and its sales) on Etsy › Ornament / Shirt."""
 
     suspended: str = Field(min_length=1, max_length=120)
     replacement: str = Field(min_length=1, max_length=120)
@@ -58,6 +58,7 @@ class SettingsIn(BaseModel):
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
     plan_products: int | None = Field(default=None, ge=1, le=100)
     ornament_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Ornament sheet for Etsy › Ornament; 0 = none
+    shirt_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Shirt sheet for Etsy › Shirt; 0 = none
     account_replacements: list[AccountReplacement] | None = Field(default=None, max_length=50)  # null keeps, [] clears
 
 

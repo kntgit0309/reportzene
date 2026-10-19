@@ -1,8 +1,10 @@
-"""Ornament plan (sheet "KH Ornament", tab Ornament): planned sales in pieces per shop, month and ornament category.
+"""Plan of a product family (sheet "KH Ornament" tab Ornament, "KH Shirt" tab Shirt…): planned sales in pieces per shop,
+month and category of the family.
 
-Layout read from the last sync of the sheet picked in Settings › Plan:
+Layout read from the last sync of the family's sheet picked in Settings › Plan:
   - a label row starting "Shop Name" | "Team" | …, then one block per month: "Total" followed by the categories
-    (Acrylic, Wood, Shaker, Ceramic, Glass, Shell, Felt, Ornament khác); the month (MM-YYYY) is a column name over the block;
+    (Ornament: Acrylic, Wood, Shaker, Ceramic, Glass, Shell, Felt, Ornament khác; Shirt: T-shirt, Sweatshirt), each mapped
+    onto a product type of the family (families.Family.plan_group); the month (MM-YYYY) is a column name over the block;
   - every row below with a shop name and a team is that shop's plan (the per-team and total rows are sums, not read).
 Plan sales are pieces, compared with the report's quantity. A month partly in the date range counts pro rata of its days.
 """
@@ -16,17 +18,14 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models import SheetSource, User
 from app.services import report, settings_store
+from app.services.families import Family
 from app.services.trackingis import ReportQuery
 
-# Plan category → product type of the ornament report (trackingis cannot tell acrylic from wood ornaments apart)
-CATEGORY_GROUP = {"acrylic": "Acrylic + Wood", "wood": "Acrylic + Wood", "shaker": "Shaker", "ceramic": "Ceramic",
-                  "glass": "Glass", "shell": "Shell", "felt": "Felt", "ornament khác": "Others"}
-OTHERS = "Others"  # any category not listed above
 _MONTH_RE = re.compile(r"^(\d{1,2})-(\d{4})$")
 
 
-def _layout_error(message: str) -> AppError:
-    return AppError(422, "ORNAMENT_PLAN_LAYOUT", message)
+def _layout_error(family: Family, message: str) -> AppError:
+    return AppError(422, f"{family.key.upper()}_PLAN_LAYOUT", message)
 
 
 def _pcs(text: str) -> float:
@@ -41,14 +40,14 @@ def _month_key(text: str) -> str | None:
     return f"{int(m.group(1)):02d}-{m.group(2)}" if m else None
 
 
-def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict[str, Any]:
     """{months: ["10-2026", …], shops: [{shop, team, plan: {month: {product type: pcs}}}]} from snapshot rows."""
     def cells(row: dict[str, Any]) -> list[str]:
         return [str(row.get(h) or "").strip() for h in header]
 
     label_at = next((i for i, r in enumerate(rows) if cells(r)[0].lower() == "shop name"), None)
     if label_at is None:
-        raise _layout_error('The ornament plan sheet has no "Shop Name" label in its first column')
+        raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Shop Name" label in its first column')
     labels = cells(rows[label_at])
     blocks: list[tuple[str, list[tuple[int, str]]]] = []
     for start, text in enumerate(labels):
@@ -59,10 +58,11 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
             end += 1
         month = next((k for k in (_month_key(h) for h in header[start:end]) if k), None)
         if month is None or end == start + 1:
-            raise _layout_error(f'No month (MM-YYYY) over the "Total" block in column {start + 1} of the ornament plan sheet')
-        blocks.append((month, [(j, CATEGORY_GROUP.get(labels[j].lower(), OTHERS)) for j in range(start + 1, end)]))
+            raise _layout_error(family, f'No month (MM-YYYY) over the "Total" block in column {start + 1} of the '
+                                        f'{family.name.lower()} plan sheet')
+        blocks.append((month, [(j, family.plan_group(labels[j])) for j in range(start + 1, end)]))
     if not blocks:
-        raise _layout_error('The ornament plan sheet has no "Total" month block after the shop columns')
+        raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Total" month block after the shop columns')
 
     shops = []
     for row in rows[label_at + 1:]:
@@ -148,21 +148,22 @@ def _names(db: Session, user: User | None, kind: str, ids: list[str]) -> set[str
     return {n.split(".")[0].strip().lower() for n in names} if kind == "teams" else {n.strip().lower() for n in names}
 
 
-def scope(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """{source, parsed, teams, shops, label}: the plan sheet and the teams / stores the report's filters keep,
+def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dict[str, Any]:
+    """{source, parsed, teams, shops, label}: the family's plan sheet and the teams / stores the report's filters keep,
     or {"error": why there is no plan to compare with}."""
     rt = settings_store.runtime(db)
-    if rt.ornament_plan_sheet_id is None:
-        return {"error": "No ornament plan sheet yet: an admin picks it in Settings → Plan"}
-    source = db.get(SheetSource, rt.ornament_plan_sheet_id)
+    sheet_id = getattr(rt, family.plan_setting)
+    if sheet_id is None:
+        return {"error": f"No {family.name.lower()} plan sheet yet: an admin picks it in Settings → Plan"}
+    source = db.get(SheetSource, sheet_id)
     if source is None:
-        return {"error": "The ornament plan sheet was removed from Team sheets: an admin picks another in Settings → Plan"}
+        return {"error": f"The {family.name.lower()} plan sheet was removed from Team sheets: an admin picks another in Settings → Plan"}
     if not source.rows:
         return {"error": f'"{source.name}" has not been synced yet: sync it in Lark › Team sheets'}
     if any(q.lists.get(f) for f in ("sellers", "designers")) or q.texts.get("keyword"):
         return {"error": "The plan is per store and team: clear the seller, designer and keyword filters to compare with it"}
     try:
-        parsed = replace_accounts(parse(source.header or [], source.rows), rt.account_replacements)
+        parsed = replace_accounts(parse(source.header or [], source.rows, family), rt.account_replacements)
         selected_teams = q.lists.get("teams") or []
         teams = None if not selected_teams or set(selected_teams) == set(rt.default_teams) else _names(db, user, "teams", selected_teams)
         shops = _names(db, user, "shops", q.lists["shops"]) if q.lists.get("shops") else None
@@ -177,9 +178,9 @@ def sheet_info(source: SheetSource) -> dict[str, Any]:
             "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None}
 
 
-def for_report(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """The ornament plan matching the report's filters, or {"error": why there is none}."""
-    s = scope(db, q, user)
+def for_report(db: Session, family: Family, q: ReportQuery, user: User | None) -> dict[str, Any]:
+    """The family's plan matching the report's filters, or {"error": why there is none}."""
+    s = scope(db, family, q, user)
     if "error" in s:
         return s
     result = plan_for(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])

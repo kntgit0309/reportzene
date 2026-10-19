@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Highcharts from 'highcharts'
-import type { OrnamentGroup, OrnamentMetric } from '../../lib/types'
+import type { FamilyDay, FamilyGroup, FamilyMetric } from '../../lib/types'
 
-const props = defineProps<{ groups: OrnamentGroup[]; metric: OrnamentMetric }>()
+const props = defineProps<{ groups: FamilyGroup[]; metric: FamilyMetric }>()
 const el = ref<HTMLDivElement | null>(null)
 let chart: Highcharts.Chart | null = null
 
-/** One stacked column per day, one colour per product type, the day's total over each column. */
+/** The stacked lines: the product types, or the sub product types of a family with a single product type (Shirt). */
+function lines(): { name: string; daily: FamilyDay[] }[] {
+  const [only] = props.groups
+  return props.groups.length === 1 && only.children.every((c) => c.daily) ? only.children.map((c) => ({ name: c.name, daily: c.daily ?? [] })) : props.groups
+}
+
+/** One stacked column per day, one colour per stacked line, the day's total over each column. */
 function options(): Highcharts.Options {
   const isMoney = props.metric === 'total_revenue'
   const prefix = isMoney ? '$' : ''
-  const days = [...new Set(props.groups.flatMap((g) => g.daily.map((d) => d.date_at)))].sort()
+  const stacked = lines()
+  const days = [...new Set(stacked.flatMap((g) => g.daily.map((d) => d.date_at)))].sort()
   return {
     credits: { enabled: false },
     title: { text: undefined },
@@ -26,7 +33,7 @@ function options(): Highcharts.Options {
       footerFormat: `Total: <b>${prefix}{point.total:,.${isMoney ? 2 : 0}f}</b>`,
     },
     plotOptions: { column: { stacking: 'normal', borderRadius: 2 } },
-    series: props.groups.map((g) => {
+    series: stacked.map((g) => {
       const byDay = new Map(g.daily.map((d) => [d.date_at, Number(d[props.metric] ?? 0)]))
       return { type: 'column' as const, name: g.name, data: days.map((d) => byDay.get(d) ?? 0) }
     }),

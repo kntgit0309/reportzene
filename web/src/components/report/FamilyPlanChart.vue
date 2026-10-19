@@ -2,9 +2,9 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Highcharts from 'highcharts'
 import { pct } from '../../lib/format'
-import type { OrnamentGroup } from '../../lib/types'
+import type { FamilyGroup } from '../../lib/types'
 
-const props = defineProps<{ groups: OrnamentGroup[] }>()
+const props = defineProps<{ groups: FamilyGroup[] }>()
 const el = ref<HTMLDivElement | null>(null)
 let chart: Highcharts.Chart | null = null
 

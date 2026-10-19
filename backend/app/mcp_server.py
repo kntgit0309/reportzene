@@ -15,7 +15,8 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import ornament, ornament_accounts, report, sheets
+from app.services import family_accounts, family_report, report, sheets
+from app.services.families import ORNAMENT, SHIRT
 
 MAX_ROWS = 200
 
@@ -28,7 +29,8 @@ mcp = MCPServer(
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
         "designer or team name into its id (product types and sub product types are filtered by name). "
         "Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
-        "etsy_ornament breaks ornament sales down by the team's ornament product types. "
+        "etsy_ornament and etsy_shirt break ornament / shirt sales down by the team's product types, the *_accounts tools per store "
+        "against the KH Ornament / KH Shirt plan. "
         "For the team's own reports call list_sheets, then read_sheet (search with q). Everything here is read-only."
     ),
 )
@@ -107,7 +109,7 @@ def etsy_ornament(ctx: Context, date_from: str = "", date_to: str = "", shops: s
                   teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
-    return _run(ctx, lambda db, u: ornament.ornament_report(db, params, u))
+    return _run(ctx, lambda db, u: family_report.family_report(db, ORNAMENT, params, u))
 
 
 @mcp.tool(description=(
@@ -118,7 +120,30 @@ def etsy_ornament_accounts(ctx: Context, date_from: str = "", date_to: str = "",
                            designers: str = "", teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
-    return _run(ctx, lambda db, u: ornament_accounts.accounts_report(db, params, u))
+    return _run(ctx, lambda db, u: family_accounts.accounts_report(db, ORNAMENT, params, u))
+
+
+@mcp.tool(description=(
+    "Shirt sales (one product type, Shirt) with its sub product types Shirt, Sweatshirt, No Brand Shirt, Patchwork Shirt and "
+    "Comfort Color: total_order, total_quantity, total_revenue, avg_order_value, share of shirt revenue, and per-day rows. "
+    "Same filters as etsy_totals. With the KH Shirt plan sheet set, Shirt and total also have plan (pieces for the range, "
+    "months pro rata; T-shirt and Sweatshirt of the plan together), plan_month and achieved; `plan` says its scope or why there is none."))
+def etsy_shirt(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+               teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: family_report.family_report(db, SHIRT, params, u))
+
+
+@mcp.tool(description=(
+    "Shirt sales per store (account) next to the store's line of the KH Shirt plan: shop, team, in_plan, total_order, "
+    "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
+    "sub product type (actuals only). Same filters as etsy_shirt; stores of the plan first, then stores selling shirts without a plan line."))
+def etsy_shirt_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "",
+                        designers: str = "", teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: family_accounts.accounts_report(db, SHIRT, params, u))
 
 
 @mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | "
