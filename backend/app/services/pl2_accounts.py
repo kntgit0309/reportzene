@@ -154,11 +154,11 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
 
 def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: float | None) -> dict[str, Any]:
     return {"shop": name, "team": team, "quantity": quantity, "kt": None if kt is None else round(kt, 2),
-            "cf": None if cf is None else round(cf, 2), "kt_minus_cf": round(kt - cf, 2) if kt is not None and cf is not None else None}
+            "cf": None if cf is None else round(cf, 2), "cf_minus_kt": round(cf - kt, 2) if kt is not None and cf is not None else None}
 
 
 def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    """{accounts: [{shop, team, quantity, kt, cf, kt_minus_cf}], others: {…, count, children}, total, kt, cf, query}."""
+    """{accounts: [{shop, team, quantity, kt, cf, cf_minus_kt}], others: {…, count, children}, total, kt, cf, query}."""
     q = report.build_query(db, {**params, "view": "date"})
     rt = settings_store.runtime(db)
     to = {_key(old): new.strip() for old, new in rt.account_replacements}

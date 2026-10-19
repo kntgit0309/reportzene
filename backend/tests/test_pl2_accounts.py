@@ -116,7 +116,7 @@ def test_pl2_per_account_kt_and_cf(client, member, upstream, sheets):
     pun = rows["PunGanterdesign"]
     # 10 pieces of each priced product (Ornament $6, Blanket $8, Shirt $5.5), one sub product type each
     assert pun["quantity"] == 30 and pun["kt"] == 10 * (6 + 8 + 5.5) and pun["cf"] == 8047.98
-    assert pun["kt_minus_cf"] == round(pun["kt"] - 8047.98, 2)
+    assert pun["cf_minus_kt"] == round(8047.98 - pun["kt"], 2)  # CF − KT
     assert rows["Daisyfloralsshop"]["kt"] == 0 and rows["Daisyfloralsshop"]["cf"] == -2497.19
     others = {c["shop"]: c for c in data["others"]["children"]}
     assert set(others) == {"OldShop", "AuthenticJJ", "NotInPlanShop"}  # not in a KH sheet, with a PL2
