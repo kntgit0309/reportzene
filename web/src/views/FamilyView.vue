@@ -11,7 +11,7 @@ import ReportFilters from '../components/report/ReportFilters.vue'
 import { auth } from '../lib/auth'
 import { FAMILIES } from '../lib/families'
 import { dateTime, money, num, pct } from '../lib/format'
-import { bar, barColor, gapClass, gapColor, gapOf, pcs, signedPcs } from '../lib/plan'
+import { bar, barColor, gapClass, gapColor, gapOf, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../lib/plan'
 import { downloadCsv, emptyFilters, fetchFamily, fetchFamilyAccounts, filterParams } from '../lib/report'
 import type { FamilyAccountsReport, FamilyKey, FamilyLine, FamilyMetric, FamilyReport, Filters } from '../lib/types'
 
@@ -79,12 +79,15 @@ const rows = computed<Row[]>(() => (data.value?.groups ?? []).map((g) => ({
   ...g, key: g.name, gap: gapOf(g), children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
 })))
 const total = computed(() => data.value?.total)
+// Avg sales/day: quantity over the calendar days of the range
+const days = computed(() => rangeDays(applied.value.date_from, applied.value.date_to))
 const kpis = computed(() => {
   const t = total.value
   return [
     { label: 'Revenue', value: t ? money(t.total_revenue) : '—' },
     { label: 'Total orders', value: t ? num(t.total_order) : '—' },
     { label: 'Quantity', value: t ? num(t.total_quantity) : '—', hint: t?.fix_quantity ? `incl. +${num(t.fix_quantity)} pcs added by hand` : '' },
+    { label: 'Avg sales/day', value: t ? perDay(t.total_quantity, days.value) : '—', hint: `pcs a day over ${days.value} days` },
     { label: 'Avg order value', value: t ? money(t.avg_order_value) : '—' },
     { label: 'Total (incl. tax)', value: t ? money(t.total) : '—' },
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
@@ -126,17 +129,18 @@ function footer(): string[] {
   const t = total.value
   if (!t) return []
   const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  return [`All ${fam.plural}`, num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
+  return [`All ${fam.plural}`, num(t.total_order), quantity(t), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
 const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
   num(r.total_quantity) + (r.fix_quantity ? ` (+${num(r.fix_quantity)})` : '')
 
 function exportCsv() {
-  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Plan to date', 'Gap', '% of plan',
+  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan',
     'Month plan', 'Revenue', 'Avg order value', 'Share']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
-    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.plan ?? '', r.gap == null ? '' : Math.round(r.gap),
+    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', perDayValue(r.total_quantity, days.value), r.plan ?? '',
+    r.gap == null ? '' : Math.round(r.gap),
     r.achieved ?? '', r.plan_month ?? '',
     r.total_revenue, r.avg_order_value, r.share ?? '',
   ]))
@@ -156,7 +160,7 @@ function exportCsv() {
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams"
                  :hide="['product_types', 'sub_product_types', 'total_order']" @apply="apply" @reset="reset" />
 
-  <div v-loading="loading" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+  <div v-loading="loading" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
     <div v-for="k in kpis" :key="k.label" class="kpi">
       <div class="kpi__label">{{ k.label }}</div>
       <div class="kpi__value">{{ k.value }}</div>
@@ -212,6 +216,9 @@ function exportCsv() {
           <span class="num">{{ num(row.total_quantity) }}</span>
           <span v-if="row.fix_quantity" class="num text-xs text-amber-600" title="Pieces trackingis misses, added by hand"> (+{{ num(row.fix_quantity) }})</span>
         </template>
+      </el-table-column>
+      <el-table-column label="Avg sales/day" prop="total_quantity" width="110" align="right">
+        <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
         <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>

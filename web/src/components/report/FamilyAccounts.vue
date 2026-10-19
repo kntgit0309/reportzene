@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { money, num, pct } from '../../lib/format'
-import { bar, barColor, gapClass, gapOf, pcs, signedPcs } from '../../lib/plan'
+import { bar, barColor, gapClass, gapOf, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
 import type { Family } from '../../lib/families'
 import { downloadCsv } from '../../lib/report'
 import type { FamilyAccountLine, FamilyAccountsReport } from '../../lib/types'
@@ -17,6 +17,7 @@ const props = defineProps<{
 }>()
 
 const hasPlan = computed(() => !!props.report && !props.report.plan.error)
+const days = computed(() => rangeDays(props.dateFrom, props.dateTo)) // Avg sales/day
 const rows = computed<Row[]>(() => (props.report?.accounts ?? []).map((a) => ({
   ...a, key: a.shop, label: a.shop, gap: gapOf(a),
   children: a.children.map((c) => ({ ...c, key: `${a.shop}/${c.name}`, label: c.name ?? '', gap: gapOf(c) })),
@@ -27,14 +28,16 @@ function footer(): string[] {
   const t = props.report?.total
   if (!t) return []
   const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  return ['All accounts', '', num(t.total_order), num(t.total_quantity), ...planCells, money(t.total_revenue), money(t.avg_order_value)]
+  return ['All accounts', '', num(t.total_order), num(t.total_quantity), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value)]
 }
 
 function exportCsv() {
-  const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Plan to date', 'Gap', '% of plan', 'Month plan',
+  const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan',
+    'Month plan',
     'Revenue', 'Avg order value']
   const body = rows.value.flatMap((a) => [a, ...(a.children ?? [])].map((r) => [
-    a.label, a.team ?? '', r === a ? '' : r.label, a.in_plan ? 'yes' : 'no', r.total_order, r.total_quantity, r.plan ?? '',
+    a.label, a.team ?? '', r === a ? '' : r.label, a.in_plan ? 'yes' : 'no', r.total_order, r.total_quantity,
+    perDayValue(r.total_quantity, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.avg_order_value,
   ]))
   downloadCsv(`${props.family.key}-accounts-${props.dateFrom}_${props.dateTo}.csv`, header, body)
@@ -71,6 +74,9 @@ function exportCsv() {
       </el-table-column>
       <el-table-column label="Quantity" prop="total_quantity" width="105" align="right" sortable>
         <template #default="{ row }"><span class="num">{{ num(row.total_quantity) }}</span></template>
+      </el-table-column>
+      <el-table-column label="Avg sales/day" prop="total_quantity" width="110" align="right">
+        <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
         <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>

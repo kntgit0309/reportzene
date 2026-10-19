@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import FamilyPlanChart from './FamilyPlanChart.vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num, pct } from '../../lib/format'
-import { bar, barColor, gapClass, gapColor, gapOf, pcs, signedPcs } from '../../lib/plan'
+import { bar, barColor, gapClass, gapColor, gapOf, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
 import { downloadCsv, fetchOverview } from '../../lib/report'
 import type { Overview, OverviewRow } from '../../lib/types'
 
@@ -36,6 +36,7 @@ defineExpose({ reload: load })
 
 const plan = computed(() => data.value?.plan)
 const hasPlan = computed(() => !!plan.value && !plan.value.error)
+const days = computed(() => rangeDays(props.params.date_from, props.params.date_to)) // Avg sales/day
 const hasKt = computed(() => (data.value?.rows ?? []).some((r) => r.pl2_per_item != null)) // PL2 theo KT, for any filters
 const rows = computed<Row[]>(() => (data.value?.rows ?? []).map((r) => ({ ...r, gap: gapOf(r) })))
 const chartRows = computed(() => rows.value.filter((r) => r.plan || r.total_quantity))
@@ -66,13 +67,14 @@ function footer(): string[] {
   const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   const pl2Cells = [...(hasKt.value ? [''] : []), ...(hasPlan.value ? [money(t.pl2_plan)] : []), ...(hasKt.value ? [money(t.pl2_est)] : [])]
   const quantity = num(t.total_quantity) + (t.fix_quantity ? ` (+${num(t.fix_quantity)})` : '')
-  return ['All products', num(t.total_order), quantity, ...planCells, money(t.total_revenue), pct(1), ...pl2Cells]
+  return ['All products', num(t.total_order), quantity, perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), pct(1), ...pl2Cells]
 }
 
 function exportCsv() {
-  const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
+  const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
     'Share', 'PL2/item', 'PL2 plan to date', 'PL2 KT (est.)']
-  const body = rows.value.map((r) => [r.name, r.sub_types.join(' | '), r.total_order, r.total_quantity, r.plan ?? '',
+  const body = rows.value.map((r) => [r.name, r.sub_types.join(' | '), r.total_order, r.total_quantity, perDayValue(r.total_quantity, days.value),
+    r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.share ?? '', r.pl2_per_item ?? '',
     r.pl2_plan ?? '', r.pl2_est ?? ''])
   downloadCsv(`products-vs-plan-${props.params.date_from}_${props.params.date_to}.csv`, header, body)
@@ -123,6 +125,9 @@ function exportCsv() {
           <span class="num">{{ num(row.total_quantity) }}</span>
           <span v-if="row.fix_quantity" class="num text-xs text-amber-600" title="Pieces trackingis misses, added by hand"> (+{{ num(row.fix_quantity) }})</span>
         </template>
+      </el-table-column>
+      <el-table-column label="Avg sales/day" prop="total_quantity" width="85" align="right">
+        <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
         <el-table-column label="Plan to date" prop="plan" width="105" align="right" sortable>

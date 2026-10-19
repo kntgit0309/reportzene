@@ -1,5 +1,16 @@
 // Plan vs actual (Etsy › Ornament, Etsy › Shirt): pieces, gap, % of plan bars — shared by the product type and account tables.
-import { num } from './format'
+import { num, num1 } from './format'
+
+/** Calendar days of a date range, both ends included: 2026-10-01 → 2026-10-19 is 19 days. */
+export function rangeDays(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)
+  return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86_400_000) + 1) : 1
+}
+
+/** Avg sales/day: pieces sold per day of the range, one decimal ("99.8"). */
+export const perDay = (pcs: number | null | undefined, days: number) => (pcs == null ? '—' : num1(pcs / days))
+/** The same, unformatted (CSV). */
+export const perDayValue = (pcs: number | null | undefined, days: number) => (pcs == null ? '' : Math.round((pcs / days) * 10) / 10)
 
 /** Pieces, rounded: 1326.9 → "1,327". */
 export const pcs = (v: number | null | undefined) => (v == null ? '—' : num(Math.round(v)))
