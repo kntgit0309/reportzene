@@ -29,6 +29,7 @@ class Runtime:
     plan_start_column: int = 17
     plan_products: int = 11
     ornament_plan_sheet_id: int | None = None
+    account_replacements: tuple[tuple[str, str], ...] = ()  # (suspended store, store that takes over its plan and sales)
 
     @property
     def trackingis_ready(self) -> bool:
@@ -93,6 +94,7 @@ def runtime(db: Session) -> Runtime:
         plan_start_column=int(s.get("plan_start_column") or settings.plan_start_column),
         plan_products=int(s.get("plan_products") or settings.plan_products),
         ornament_plan_sheet_id=int(s.get("ornament_plan_sheet_id") or 0) or None,
+        account_replacements=tuple((r["suspended"], r["replacement"]) for r in s.get("account_replacements") or []),
     )
 
 
@@ -105,7 +107,8 @@ def status(db: Session) -> dict[str, Any]:
     return {"trackingis_token": _hint(rt.trackingis_token), "trackingis_url": settings.trackingis_url,
             "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret),
             "plan_sheet_id": rt.plan_sheet_id, "plan_start_column": rt.plan_start_column, "plan_products": rt.plan_products,
-            "ornament_plan_sheet_id": rt.ornament_plan_sheet_id}
+            "ornament_plan_sheet_id": rt.ornament_plan_sheet_id,
+            "account_replacements": [{"suspended": old, "replacement": new} for old, new in rt.account_replacements]}
 
 
 def save(db: Session, changes: dict[str, Any]) -> None:
@@ -126,6 +129,9 @@ def save(db: Session, changes: dict[str, Any]) -> None:
     for f in INT_FIELDS:
         if changes.get(f) is not None:
             value[f] = int(changes[f])
+    if changes.get("account_replacements") is not None:  # the whole list is replaced; [] clears it
+        value["account_replacements"] = [{"suspended": r["suspended"].strip(), "replacement": r["replacement"].strip()}
+                                         for r in changes["account_replacements"]]
     row = db.get(AppSetting, KEY)
     if row is None:
         db.add(AppSetting(key=KEY, value=value))

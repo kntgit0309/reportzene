@@ -79,3 +79,36 @@ def test_accounts_plan_total_is_the_product_type_tables(client, member, upstream
     accounts = client.get(f"{A}{url}", headers=member).json()["data"]
     by_type = client.get(f"/api/v1/report/etsy/ornament{url}", headers=member).json()["data"]
     assert accounts["total"]["plan"] == by_type["total"]["plan"] == round((525 + 275 + 940) * 19 / 31, 1)
+
+
+def test_account_replacements_are_saved_in_settings(client, admin, member):
+    body = {"account_replacements": [{"suspended": " OnebyHenry ", "replacement": "NewShop"}]}
+    assert client.put("/api/v1/settings", json=body, headers=member).status_code == 403
+    saved = client.put("/api/v1/settings", json=body, headers=admin).json()["data"]["account_replacements"]
+    assert saved == [{"suspended": "OnebyHenry", "replacement": "NewShop"}]
+    assert client.put("/api/v1/settings", json={"plan_products": 11}, headers=admin).json()["data"]["account_replacements"] == saved
+    same = {"account_replacements": [{"suspended": "NewShop", "replacement": "newshop"}]}
+    assert client.put("/api/v1/settings", json=same, headers=admin).status_code == 422
+    assert client.put("/api/v1/settings", json={"account_replacements": []}, headers=admin).json()["data"]["account_replacements"] == []
+
+
+def test_replacement_takes_the_suspended_stores_plan_line_and_sales(client, admin, member, upstream, plan_sheet):
+    client.put("/api/v1/settings", json={"account_replacements": [{"suspended": "OnebyHenry", "replacement": "NewShop"}]}, headers=admin)
+    data = client.get(f"{A}?date_from=2026-10-01&date_to=2026-10-31", headers=member).json()["data"]
+    every = sum(len(subs) for _, subs in GROUPS)
+
+    assert [a["shop"] for a in data["accounts"]] == ["PunGanterdesign", "Daisyfloralsshop", "NewShop"]  # in OnebyHenry's place
+    new = data["accounts"][2]
+    assert new["in_plan"] and new["team"] == "Etsy 3" and new["plan"] == 940 and new["replaces"] == ["OnebyHenry"]
+    assert new["total_quantity"] == 2 * (2 + 1) * every  # its own sales and the suspended store's
+    assert next(c for c in new["children"] if c["name"] == "Felt")["plan"] == 800
+    assert data["total"]["plan"] == 525 + 275 + 940
+
+
+def test_replacing_with_a_store_of_the_plan_adds_the_two_lines_up():
+    from app.services.ornament_plan import parse, plan_for, replace_accounts
+    from tests.test_ornament_plan import HEADER as H, ROWS as R
+    plan = replace_accounts(parse(H, R), (("PunGanterdesign", "Daisyfloralsshop"),))
+    assert [s["shop"] for s in plan["shops"]] == ["Daisyfloralsshop", "OnebyHenry"]
+    assert plan["shops"][0]["replaces"] == ["PunGanterdesign"]
+    assert plan_for(plan, "2026-10-01", "2026-10-31", shops={"daisyfloralsshop"})["groups"]["Acrylic + Wood"]["plan"] == 295 + 70

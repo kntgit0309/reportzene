@@ -7,7 +7,9 @@ import { bar, barColor, gapClass, gapOf, pcs, signedPcs } from '../../lib/plan'
 import { downloadCsv } from '../../lib/report'
 import type { OrnamentAccountLine, OrnamentAccountsReport } from '../../lib/types'
 
-type Row = OrnamentAccountLine & { key: string; label: string; team?: string | null; in_plan?: boolean; gap?: number; children?: Row[] }
+type Row = OrnamentAccountLine & {
+  key: string; label: string; team?: string | null; in_plan?: boolean; replaces?: string[]; gap?: number; children?: Row[]
+}
 
 const props = defineProps<{ report: OrnamentAccountsReport | null; loading: boolean; error: string; dateFrom: string; dateTo: string }>()
 
@@ -52,6 +54,10 @@ function exportCsv() {
         <template #default="{ row }">
           {{ row.label }}
           <el-tag v-if="row.in_plan === false" size="small" type="info" class="ml-1">not in plan</el-tag>
+          <div v-if="row.replaces?.length" class="truncate text-xs text-amber-600"
+               :title="`Takes over the plan line and the sales of suspended ${row.replaces.join(', ')} (Settings › Plan)`">
+            replaces {{ row.replaces.join(', ') }}
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="Team" prop="team" width="90" sortable>
@@ -93,7 +99,8 @@ function exportCsv() {
     </el-table>
     <div class="mt-2 text-xs text-muted">
       Plan: each store's row of the plan sheet, matched by store name; a store opens onto its product types. Actual: trackingis,
-      ornament sub product types only, so the Felt pieces added by hand (not tied to a store) are not in these rows.
+      ornament sub product types only, so the Felt pieces added by hand (not tied to a store) are not in these rows. A suspended
+      store listed in Settings › Plan hands its plan line and its sales to its replacement.
     </div>
   </div>
 </template>

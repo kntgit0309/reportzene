@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Delete, Plus } from '@element-plus/icons-vue'
 import PageHeader from '../components/PageHeader.vue'
 import UsersSettings from '../components/settings/UsersSettings.vue'
 import { api } from '../lib/api'
 import { columnLetter } from '../lib/format'
 import { fetchOptions } from '../lib/report'
-import type { Option, Sheet } from '../lib/types'
+import type { AccountReplacement, Option, Sheet } from '../lib/types'
 
 type Status = {
   trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; ornament_plan_sheet_id: number | null
+  account_replacements: AccountReplacement[]
 }
 type Check = { ok: boolean; message: string }
 
@@ -18,8 +20,9 @@ const tab = ref('connections')
 const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
-  ornament_plan_sheet_id: null as number | null | undefined })
+  ornament_plan_sheet_id: null as number | null | undefined, account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
+const shops = ref<Option[]>([])
 const sheets = ref<Sheet[]>([])
 const saving = ref(false)
 const testing = ref(false)
@@ -29,10 +32,11 @@ function fill(s: Status) {
   status.value = s
   Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
-    ornament_plan_sheet_id: s.ornament_plan_sheet_id })
+    ornament_plan_sheet_id: s.ornament_plan_sheet_id, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
 async function loadTeams() {
   try { teams.value = (await fetchOptions('teams')).filter((t) => t.type !== 'bu') } catch { teams.value = [] }
+  try { shops.value = await fetchOptions('shops') } catch { shops.value = [] }
 }
 onMounted(async () => {
   fill((await api.get<Status>('/settings')).data)
@@ -48,7 +52,8 @@ async function save() {
   saving.value = true
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
-      ornament_plan_sheet_id: form.ornament_plan_sheet_id ?? 0 })
+      ornament_plan_sheet_id: form.ornament_plan_sheet_id ?? 0,
+      account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
     fill(res.data)
     ElMessage.success(res.meta.message)
     await test()
@@ -112,6 +117,22 @@ async function save() {
             </el-select>
             <div class="text-xs text-muted">
               The "KH Ornament" tab: a "Shop Name | Team" label row, then per month a "Total" column and the categories, in pieces.
+            </div>
+          </el-form-item>
+          <el-form-item label="Account replacements (Etsy › Ornament)">
+            <div class="w-full space-y-2">
+              <div v-for="(r, i) in form.account_replacements" :key="i" class="flex items-center gap-2">
+                <el-input v-model="r.suspended" placeholder="Suspended store, as in the plan sheet" class="flex-1" />
+                <span class="text-muted">→</span>
+                <el-select v-model="r.replacement" filterable allow-create default-first-option placeholder="Store that takes over" class="flex-1">
+                  <el-option v-for="s in shops" :key="s.id" :label="s.name" :value="s.name" />
+                </el-select>
+                <el-button :icon="Delete" circle plain aria-label="Remove" @click="form.account_replacements.splice(i, 1)" />
+              </div>
+              <el-button size="small" :icon="Plus" @click="form.account_replacements.push({ suspended: '', replacement: '' })">Add replacement</el-button>
+            </div>
+            <div class="text-xs text-muted">
+              When a store is suspended, the store that takes over gets its line of the ornament plan, and the suspended store's sales count in its row.
             </div>
           </el-form-item>
 

@@ -79,7 +79,11 @@ export type OrnamentAccountLine = {
   total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
   plan?: number | null; plan_month?: number | null; achieved?: number | null // absent when there is no plan to compare with
 }
-export type OrnamentAccount = OrnamentAccountLine & { shop: string; team: string | null; in_plan: boolean; children: OrnamentAccountLine[] }
+export type OrnamentAccount = OrnamentAccountLine & {
+  shop: string; team: string | null; in_plan: boolean; children: OrnamentAccountLine[]
+  replaces: string[] // suspended stores whose plan line and sales this store took over (Settings › Plan)
+}
+export type AccountReplacement = { suspended: string; replacement: string }
 export type OrnamentAccountsReport = {
   accounts: OrnamentAccount[]
   total: OrnamentAccountLine

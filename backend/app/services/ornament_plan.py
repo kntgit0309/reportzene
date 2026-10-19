@@ -78,6 +78,23 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"months": [m for m, _ in blocks], "shops": shops}
 
 
+def replace_accounts(parsed: dict[str, Any], replacements: tuple[tuple[str, str], ...]) -> dict[str, Any]:
+    """The plan line of a suspended store goes to its replacement (Settings › Plan), in the suspended store's place;
+    lines that end up on one store are added up. Each shop gets `replaces`: the suspended stores it took over."""
+    to = {old.strip().lower(): new.strip() for old, new in replacements}
+    merged: dict[str, dict[str, Any]] = {}
+    for s in parsed["shops"]:
+        name = to.get(s["shop"].lower(), s["shop"])
+        line = merged.setdefault(name.lower(), {"shop": name, "team": s["team"], "plan": {}, "replaces": []})
+        for month, groups in s["plan"].items():
+            per = line["plan"].setdefault(month, {})
+            for group, pcs in groups.items():
+                per[group] = per.get(group, 0.0) + pcs
+        if name != s["shop"]:
+            line["replaces"].append(s["shop"])
+    return {**parsed, "shops": list(merged.values())}
+
+
 def month_days(date_from: str, date_to: str) -> dict[str, tuple[int, int]]:
     """MM-YYYY → (days of the range in that month, days of the month)."""
     start, end = date.fromisoformat(date_from), date.fromisoformat(date_to)
@@ -95,7 +112,7 @@ def shop_plans(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[
     """Per kept shop, in sheet order: {shop, team, groups: {product type: {plan (pro rata), plan_month}}}, unrounded;
     plus the months covered and those the sheet has no plan for. `teams` / `shops`: lower-case names, None = every shop."""
     rows = [s for s in parsed["shops"] if (teams is None or s["team"].lower() in teams) and (shops is None or s["shop"].lower() in shops)]
-    out: list[dict[str, Any]] = [{"shop": s["shop"], "team": s["team"], "groups": {}} for s in rows]
+    out: list[dict[str, Any]] = [{"shop": s["shop"], "team": s["team"], "replaces": s.get("replaces", []), "groups": {}} for s in rows]
     covered, missing = [], []
     for month, (days, month_len) in month_days(date_from, date_to).items():
         if month not in parsed["months"]:
@@ -145,7 +162,7 @@ def scope(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
     if any(q.lists.get(f) for f in ("sellers", "designers")) or q.texts.get("keyword"):
         return {"error": "The plan is per store and team: clear the seller, designer and keyword filters to compare with it"}
     try:
-        parsed = parse(source.header or [], source.rows)
+        parsed = replace_accounts(parse(source.header or [], source.rows), rt.account_replacements)
         selected_teams = q.lists.get("teams") or []
         teams = None if not selected_teams or set(selected_teams) == set(rt.default_teams) else _names(db, user, "teams", selected_teams)
         shops = _names(db, user, "shops", q.lists["shops"]) if q.lists.get("shops") else None

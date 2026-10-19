@@ -2,6 +2,7 @@
 
 Actual: the trackingis store view filtered on every ornament sub product type, and once per product type for the
 breakdown (run in parallel, cached like the report). Plan: the shop rows of the plan sheet, matched by store name.
+A suspended store listed in Settings › Plan hands its plan line and its sales to its replacement.
 Pieces added by hand (ornament.QUANTITY_FIXES) are not tied to a store, so they are not in these rows.
 """
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import ornament, ornament_plan, report
+from app.services import ornament, ornament_plan, report, settings_store
 from app.services.trackingis import MAX_PER_PAGE, ReportQuery, TrackingisClient, TrackingisError
 
 MAX_PAGES = 5  # 200 stores per page
@@ -43,6 +44,17 @@ def _key(name: Any) -> str:
     return str(name or "").strip().lower()
 
 
+def _by_store(rows: list[dict[str, Any]], to: dict[str, str]) -> dict[str, dict[str, Any]]:
+    """trackingis store rows keyed by store name; a suspended store's sales are added to its replacement (Settings › Plan)."""
+    out: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        name = to.get(_key(r.get("shop_name"))) or str(r.get("shop_name") or "")
+        merged = out.setdefault(_key(name), {"shop_name": name, **dict.fromkeys(METRICS, 0.0)})
+        for f in METRICS:
+            merged[f] += float(r.get(f) or 0)
+    return out
+
+
 def _metrics(row: dict[str, Any] | None) -> dict[str, Any]:
     out: dict[str, Any] = {f: float((row or {}).get(f) or 0) for f in METRICS}
     out["total_order"], out["total_quantity"] = int(out["total_order"]), int(out["total_quantity"])
@@ -68,8 +80,10 @@ def accounts_report(db: Session, params: dict[str, Any], user: User | None = Non
     query}. Stores of the plan come first in sheet order, then stores with ornament sales but no plan line."""
     q = report.build_query(db, {**params, "view": "date"})
     data = report._call(db, user, report._key("ornament_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, q))
-    actual = {_key(r.get("shop_name")): r for r in data["all"]}
-    by_group = {name: {_key(r.get("shop_name")): r for r in rows} for name, rows in data["groups"].items()}
+    replacements = settings_store.runtime(db).account_replacements
+    to = {_key(old): new.strip() for old, new in replacements}
+    actual = _by_store(data["all"], to)
+    by_group = {name: _by_store(rows, to) for name, rows in data["groups"].items()}
 
     s = ornament_plan.scope(db, q, user)
     plans: list[dict[str, Any]] = []
@@ -96,7 +110,7 @@ def accounts_report(db: Session, params: dict[str, Any], user: User | None = Non
             line = {"name": group, **_metrics(row)}
             children.append(_with_plan(line, gp or ({"plan": 0.0, "plan_month": 0.0} if p else None)) if has_plan else line)
         line = {"shop": name, "team": p["team"] if p else None, "in_plan": p is not None, **_metrics(actual.get(key)),
-                "children": children}
+                "replaces": [old for old, new in replacements if _key(new) == key], "children": children}
         accounts.append(_with_plan(line, _sum_plan([p]) if p else None) if has_plan else line)
 
     total = _metrics({f: sum(a[f] for a in accounts) for f in METRICS})
