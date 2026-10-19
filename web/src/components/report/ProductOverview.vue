@@ -168,7 +168,7 @@ function exportCsv() {
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
       includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
       <template v-if="hasPlan">The plan is for ZenE as a whole.</template>
-      <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) below.</template>
+      <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above.</template>
     </div>
   </div>
 </template>

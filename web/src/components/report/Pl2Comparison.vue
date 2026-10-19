@@ -125,7 +125,8 @@ function footer(): string[] {
     </el-table>
     <div class="mt-2 text-xs text-muted">
       PL2 theo CF: finance's monthly PL2 plan and actual (the running month so far), for B.U ZenE (opens onto each team) or
-      the teams filtered. PL2 theo KT: the estimate above (quantity × the plan's PL2/item) for the report's days of each month.
+      the teams filtered. PL2 theo KT: the estimate of Sales by product vs plan below (quantity × the plan's PL2/item) for the
+      report's days of each month.
       Plan to date counts the CF plan pro rata of those days; Gap (CF) = Actual (CF) − Plan to date and % of plan = Actual / Plan
       to date. KT − CF = PL2 KT − PL2 actual (CF).
     </div>
