@@ -1,4 +1,4 @@
-"""Etsy sale report (ZenE): rows per view, summary cards and filter options, read from trackingis."""
+"""Etsy sale report (ZenE): rows per view, summary cards, the ornament breakdown and filter options, read from trackingis."""
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Request
@@ -8,7 +8,7 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import report
+from app.services import ornament, report
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
 OPTION_KINDS = "^(shops|sellers|designers|product_types|sub_product_types|teams)$"
@@ -30,6 +30,12 @@ def etsy_report(request: Request, view: str = Query("date", max_length=20), date
 @router.get("/totals")
 def etsy_totals(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     return ok(report.etsy_totals(db, _params(request), user), request)
+
+
+@router.get("/ornament")
+def ornament_report(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Ornament sales per product type (Etsy › Ornament), same filters as the report."""
+    return ok(ornament.ornament_report(db, _params(request), user), request)
 
 
 @router.get("/options/{kind}")

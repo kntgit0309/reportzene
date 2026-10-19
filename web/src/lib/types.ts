@@ -44,7 +44,21 @@ export type Totals = {
   avg_order_value: number; days: number; date_from: string; date_to: string
 }
 
-export type Option = { id: number | string; name: string; parent_id?: number | null; type?: string }
+/** Ornament breakdown (Etsy › Ornament): one line per product type, its sub product types as children. */
+export type OrnamentLine = {
+  name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
+  avg_order_value: number; share: number | null
+}
+export type OrnamentMetric = 'total_revenue' | 'total_order' | 'total_quantity'
+export type OrnamentDay ={ date_at: string; total_order: number; total_quantity: number; total_revenue: number }
+export type OrnamentGroup = OrnamentLine & { children: OrnamentLine[]; daily: OrnamentDay[] }
+export type OrnamentReport = {
+  total: Omit<Totals, 'date_from' | 'date_to'>
+  groups: OrnamentGroup[]
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+
+export type Option ={ id: number | string; name: string; parent_id?: number | null; type?: string }
 
 export type Filters = {
   dateRange: [string, string]

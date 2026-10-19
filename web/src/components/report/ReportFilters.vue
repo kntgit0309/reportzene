@@ -6,7 +6,9 @@ import type { Filters, Option } from '../../lib/types'
 
 const filters = defineModel<Filters>({ required: true })
 const teamsTouched = defineModel<boolean>('teamsTouched', { required: true })
-const props = defineProps<{ defaultTeams: string[] }>()
+// `hide`: filters a page fixes itself (the ornament page sets the product types)
+const props = defineProps<{ defaultTeams: string[]; hide?: ('product_types' | 'sub_product_types' | 'total_order')[] }>()
+const shown = (field: 'product_types' | 'sub_product_types' | 'total_order') => !props.hide?.includes(field)
 const emit = defineEmits<{ apply: []; reset: [] }>()
 
 const advanced = ref(false)
@@ -78,12 +80,12 @@ const chips = computed(() => {
             <el-option v-for="o in opts.designers" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Product type">
+        <el-form-item v-if="shown('product_types')" label="Product type">
           <el-select v-model="filters.product_types" multiple filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="2" placeholder="All types" class="w-full">
             <el-option v-for="o in opts.product_types" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Sub product type">
+        <el-form-item v-if="shown('sub_product_types')" label="Sub product type">
           <el-select v-model="filters.sub_product_types" multiple filterable collapse-tags collapse-tags-tooltip :max-collapse-tags="2" placeholder="All sub types" class="w-full">
             <el-option v-for="o in opts.sub_product_types" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
@@ -93,7 +95,7 @@ const chips = computed(() => {
             <el-option v-for="o in teamOptions" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Total order">
+        <el-form-item v-if="shown('total_order')" label="Total order">
           <el-input v-model="filters.total_order" type="number" min="0" placeholder="Enter total order" clearable>
             <template #prepend>
               <el-select v-model="filters.symbol" class="!w-[72px]">

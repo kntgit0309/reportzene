@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import report, sheets
+from app.services import ornament, report, sheets
 
 MAX_ROWS = 200
 
@@ -28,6 +28,7 @@ mcp = MCPServer(
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
         "designer or team name into its id (product types and sub product types are filtered by name). "
         "Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
+        "etsy_ornament breaks ornament sales down by the team's ornament product types. "
         "For the team's own reports call list_sheets, then read_sheet (search with q). Everything here is read-only."
     ),
 )
@@ -94,6 +95,17 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
                       product_types=product_types, sub_product_types=sub_product_types, teams=teams, keyword=keyword,
                       total_order=total_order, symbol=symbol)
     return _run(ctx, lambda db, u: report.etsy_report(db, params, u))
+
+
+@mcp.tool(description=(
+    "Ornament sales per product type (Acrylic + Wood, Shell, Shaker, Ceramic, Glass, Felt, Others), each with its sub product "
+    "types: total_order, total_quantity, total_revenue, avg_order_value, share of ornament revenue, and per-day rows. "
+    "Same filters as etsy_totals; an order with several ornament types counts in each, so use total for the overall numbers."))
+def etsy_ornament(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+                  teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: ornament.ornament_report(db, params, u))
 
 
 @mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | "
