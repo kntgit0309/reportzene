@@ -37,6 +37,7 @@ class SettingsIn(BaseModel):
     plan_sheet_id: int | None = Field(default=None, ge=0)  # 0 = no plan sheet
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
     plan_products: int | None = Field(default=None, ge=1, le=100)
+    ornament_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Ornament sheet for Etsy › Ornament; 0 = none
 
 
 LARK_URL = r"^https://[A-Za-z0-9.\-]+\.(larksuite|feishu)\.(com|cn)/"

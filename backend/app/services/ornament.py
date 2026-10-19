@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import report, settings_store
+from app.services import ornament_plan, report, settings_store
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError, summarize
 
 # Product type → trackingis sub product types (names exactly as trackingis lists them). Wooden Garland is counted in Others.
@@ -87,9 +87,10 @@ def _plus_quantity(totals: dict[str, Any], pcs: int) -> dict[str, Any]:
 
 
 def ornament_report(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    """{total, groups: [{name, ...totals, share, daily, children: [{name, ...totals, share}]}], fix_note, query}.
+    """{total, groups: [{name, ...totals, share, daily, children: [{name, ...totals, share}]}], fix_note, plan, query}.
 
-    Rows carrying hand-added quantity (QUANTITY_FIXES) have `fix_quantity` = the pieces added."""
+    Rows carrying hand-added quantity (QUANTITY_FIXES) have `fix_quantity` = the pieces added. With an ornament plan
+    sheet (Settings › Plan), product types and the total also carry plan / plan_month / achieved."""
     q = report.build_query(db, {**params, "view": "date"})
     data = report._call(db, user, report._key("ornament", q), report.CACHE_TTL_S, lambda c: _fetch(c, q))
     fixes = {s: {d: n for d, n in by_day.items() if q.date_from <= d <= q.date_to} for s, by_day in QUANTITY_FIXES.items()}
@@ -110,6 +111,27 @@ def ornament_report(db: Session, params: dict[str, Any], user: User | None = Non
                      "share": _share(data["subs"][s]["total_revenue"], revenue)} for s in subs]
         groups.append({"name": name, **totals, "share": _share(totals["total_revenue"], revenue), "children": children,
                        "daily": [{f: d.get(f) for f in DAY_FIELDS} for d in days]})
-    total = _plus_quantity(data["total"], sum(n for by_day in fixes.values() for n in by_day.values()))
-    return {"total": total, "groups": groups, "fix_note": FIX_NOTE if fixes else None,
+    total = {**_plus_quantity(data["total"], sum(n for by_day in fixes.values() for n in by_day.values()))}
+    plan = _attach_plan(db, q, user, groups, total)
+    return {"total": total, "groups": groups, "fix_note": FIX_NOTE if fixes else None, "plan": plan,
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
+
+
+def _attach_plan(db: Session, q: ReportQuery, user: User | None, groups: list[dict[str, Any]], total: dict[str, Any]) -> dict[str, Any]:
+    """Add plan (pieces, pro rata over the range), plan_month and achieved (quantity / plan) to the product types and the
+    total; return the plan's source and scope, or {"error"} when there is none to compare with."""
+    plan = ornament_plan.for_report(db, q, user)
+    if "error" in plan:
+        return plan
+    by_group = plan.pop("groups")
+    for row in groups:
+        p = by_group.get(row["name"], {"plan": 0.0, "plan_month": 0})
+        row |= {"plan": p["plan"], "plan_month": p["plan_month"], "achieved": _ratio(row["total_quantity"], p["plan"])}
+    total["plan"] = round(sum(p["plan"] for p in by_group.values()), 1)
+    total["plan_month"] = sum(p["plan_month"] for p in by_group.values())
+    total["achieved"] = _ratio(total["total_quantity"], total["plan"])
+    return plan
+
+
+def _ratio(actual: float, plan: float) -> float | None:
+    return round(actual / plan, 4) if plan else None
