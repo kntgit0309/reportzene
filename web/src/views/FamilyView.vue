@@ -92,7 +92,7 @@ const kpis = computed(() => {
   ]
 })
 const subtitle = computed(() => `ZenE ${fam.name.toLowerCase()} sales by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
-// A family of a single product type (Shirt): no per type plan chart, the day chart stacks its sub product types
+// A family of a single product type (Shirt): the day chart stacks its sub product types
 const oneType = computed(() => (data.value?.groups.length ?? 0) === 1)
 
 // --- plan (sheet "KH Ornament", "KH Shirt"): pieces, compared with the quantity sold ---
@@ -180,7 +180,7 @@ function exportCsv() {
           <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
         </div>
       </div>
-      <FamilyPlanChart v-if="!oneType" :groups="data.groups" />
+      <FamilyPlanChart :groups="data.groups" />
     </template>
   </div>
 

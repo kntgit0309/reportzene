@@ -124,8 +124,8 @@ def etsy_ornament_accounts(ctx: Context, date_from: str = "", date_to: str = "",
 
 
 @mcp.tool(description=(
-    "Shirt sales (one product type, Shirt) with its sub product types Shirt, Sweatshirt, No Brand Shirt, Patchwork Shirt and "
-    "Comfort Color: total_order, total_quantity, total_revenue, avg_order_value, share of shirt revenue, and per-day rows. "
+    "Shirt sales (one product type, Shirt) with its sub product types Shirt, Sweatshirt, No Brand Shirt, Patchwork Shirt, "
+    "Comfort Color and Baby Tee: total_order, total_quantity, total_revenue, avg_order_value, share of shirt revenue, and per-day rows. "
     "Same filters as etsy_totals. With the KH Shirt plan sheet set, Shirt and total also have plan (pieces for the range, "
     "months pro rata; T-shirt and Sweatshirt of the plan together), plan_month and achieved; `plan` says its scope or why there is none."))
 def etsy_shirt(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
