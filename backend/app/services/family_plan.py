@@ -2,10 +2,11 @@
 month and category of the family.
 
 Layout read from the last sync of the family's sheet picked in Settings › Plan:
-  - a label row starting "Shop Name" | "Team" | …, then one block per month: "Total" followed by the categories
-    (Ornament: Acrylic, Wood, Shaker, Ceramic, Glass, Shell, Felt, Ornament khác; Shirt: T-shirt, Sweatshirt), each mapped
-    onto a product type of the family (families.Family.plan_group), or "Total" alone (Flag), counted as the family's
-    `plan_other`; the month (MM-YYYY) is a column name over the block;
+  - a label row starting "Shop Name" | "Team" | … (or the sheet's header row itself: KH Wooden Block), then one block per
+    month: "Total" followed by the categories (Ornament: Acrylic, Wood, Shaker, Ceramic, Glass, Shell, Felt, Ornament khác;
+    Shirt: T-shirt, Sweatshirt), each mapped onto a product type of the family (families.Family.plan_group), or "Total"
+    alone (Flag, Badge Reel), with the month (MM-YYYY) as a column name over the block; or the month itself as the label
+    of its only column (Wooden Block). A month without categories counts as the family's `plan_other`;
   - every row below with a shop name and a team is that shop's plan (the per-team and total rows are sums, not read).
 Plan sales are pieces, compared with the report's quantity. A month partly in the date range counts pro rata of its days.
 """
@@ -23,6 +24,7 @@ from app.services.families import Family
 from app.services.trackingis import ReportQuery
 
 _MONTH_RE = re.compile(r"^(\d{1,2})-(\d{4})$")
+_BLANK_RE = re.compile(r"^Column \d+$")  # name lark_sheets.unique_header gives a blank header cell
 
 
 def _layout_error(family: Family, message: str) -> AppError:
@@ -46,12 +48,19 @@ def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict
     def cells(row: dict[str, Any]) -> list[str]:
         return [str(row.get(h) or "").strip() for h in header]
 
-    label_at = next((i for i, r in enumerate(rows) if cells(r)[0].lower() == "shop name"), None)
-    if label_at is None:
-        raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Shop Name" label in its first column')
-    labels = cells(rows[label_at])
+    if header and header[0].strip().lower() == "shop name":  # the labels are the header row (blank cells named "Column N")
+        labels, body = ["" if _BLANK_RE.match(h) else h.strip() for h in header], rows
+    else:
+        label_at = next((i for i, r in enumerate(rows) if cells(r)[0].lower() == "shop name"), None)
+        if label_at is None:
+            raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Shop Name" label in its first column')
+        labels, body = cells(rows[label_at]), rows[label_at + 1:]
     blocks: list[tuple[str, list[tuple[int, str]]]] = []
     for start, text in enumerate(labels):
+        own_month = _month_key(text)
+        if own_month:  # the month's only column: its plan for the whole family
+            blocks.append((own_month, [(start, family.plan_group("total"))]))
+            continue
         if text.lower() != "total":
             continue
         end = start + 1
@@ -68,7 +77,7 @@ def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict
         raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Total" month block after the shop columns')
 
     shops = []
-    for row in rows[label_at + 1:]:
+    for row in body:
         c = cells(row)
         if not (c[0] and c[1]):
             continue
