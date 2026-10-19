@@ -13,7 +13,7 @@ from app.models import AppSetting
 
 KEY = "runtime"
 SECRET_FIELDS = ("trackingis_token", "lark_app_secret")
-PLAIN_FIELDS = ("lark_app_id",)
+PLAIN_FIELDS = ("lark_app_id", "sheet_sync_at")  # sheet_sync_at "" = no daily sync
 LIST_FIELDS = ("default_teams",)
 INT_FIELDS = ("plan_sheet_id", "plan_start_column", "plan_products", "pl2_cf_sheet_id")  # sheet ids: 0 = none
 LEGACY_PLAN_FAMILIES = ("ornament", "shirt")  # saved as <family>_plan_sheet_id before family_plan_sheets
@@ -26,6 +26,7 @@ class Runtime:
     default_teams: list[str]
     lark_app_id: str = ""
     lark_app_secret: str = ""
+    sheet_sync_at: str = "10:00"  # daily sync of every team sheet ("HH:MM", Vietnam time; "" = off)
     plan_sheet_id: int | None = None
     plan_start_column: int = 17
     plan_products: int = 11
@@ -92,6 +93,7 @@ def runtime(db: Session) -> Runtime:
         default_teams=_split(s.get("default_teams") if "default_teams" in s else settings.default_teams),
         lark_app_id=s.get("lark_app_id") or settings.lark_app_id,
         lark_app_secret=_decrypt(s.get("lark_app_secret")) or settings.lark_app_secret,
+        sheet_sync_at=s.get("sheet_sync_at", settings.sheet_sync_at),  # "" saved = off
         plan_sheet_id=int(s.get("plan_sheet_id") or 0) or None,
         plan_start_column=int(s.get("plan_start_column") or settings.plan_start_column),
         plan_products=int(s.get("plan_products") or settings.plan_products),
@@ -117,6 +119,7 @@ def status(db: Session) -> dict[str, Any]:
     rt = runtime(db)
     return {"trackingis_token": _hint(rt.trackingis_token), "trackingis_url": settings.trackingis_url,
             "default_teams": rt.default_teams, "lark_app_id": rt.lark_app_id, "lark_app_secret": _hint(rt.lark_app_secret),
+            "sheet_sync_at": rt.sheet_sync_at,
             "plan_sheet_id": rt.plan_sheet_id, "plan_start_column": rt.plan_start_column, "plan_products": rt.plan_products,
             "pl2_cf_sheet_id": rt.pl2_cf_sheet_id,
             "family_plan_sheets": rt.family_plan_sheets,

@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import PageHeader from '../components/PageHeader.vue'
 import UsersSettings from '../components/settings/UsersSettings.vue'
 import { api } from '../lib/api'
 import { FAMILY_LIST } from '../lib/families'
-import { columnLetter } from '../lib/format'
+import { columnLetter, dateTime } from '../lib/format'
 import { fetchOptions } from '../lib/report'
 import type { AccountReplacement, FamilyKey, Option, Sheet } from '../lib/types'
 
 type Status = {
   trackingis_token: string; trackingis_url: string; default_teams: string[]; lark_app_id: string; lark_app_secret: string; users_with_sso_token?: number
+  sheet_sync_at: string // daily sync of every team sheet, "HH:MM" Vietnam time; "" = off
+  sheet_sync_last?: { day?: string; started_at?: string; finished_at?: string; synced?: number; failed?: number }
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; pl2_cf_sheet_id: number | null
   family_plan_sheets: Partial<Record<FamilyKey, number>> // product family (Etsy › Ornament…) → its plan sheet
   account_replacements: AccountReplacement[]
@@ -20,7 +22,7 @@ type Check = { ok: boolean; message: string }
 
 const tab = ref('connections')
 const status = ref<Status | null>(null)
-const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '',
+const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '', sheet_sync_at: '10:00',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
   pl2_cf_sheet_id: null as number | null | undefined,
   family_plan_sheets: {} as Partial<Record<FamilyKey, number | null>>, account_replacements: [] as AccountReplacement[] })
@@ -33,11 +35,18 @@ const checks = ref<Record<string, Check> | null>(null)
 
 function fill(s: Status) {
   status.value = s
-  Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, default_teams: s.default_teams.map(Number),
+  Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, sheet_sync_at: s.sheet_sync_at,
+    default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
     pl2_cf_sheet_id: s.pl2_cf_sheet_id,
     family_plan_sheets: { ...s.family_plan_sheets }, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
+const lastSync = computed(() => {
+  const l = status.value?.sheet_sync_last
+  if (!l?.day) return 'No daily sync has run yet.'
+  if (!l.finished_at) return `Running since ${dateTime(l.started_at)}…`
+  return `Last run ${dateTime(l.finished_at)}: ${l.synced} synced${l.failed ? `, ${l.failed} failed (see Lark › Team sheets)` : ''}.`
+})
 async function loadTeams() {
   try { teams.value = (await fetchOptions('teams')).filter((t) => t.type !== 'bu') } catch { teams.value = [] }
   try { shops.value = await fetchOptions('shops') } catch { shops.value = [] }
@@ -56,7 +65,7 @@ async function save() {
   saving.value = true
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
-      pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0,
+      pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0, sheet_sync_at: form.sheet_sync_at || '', // cleared = no daily sync
       family_plan_sheets: Object.fromEntries(FAMILY_LIST.map((f) => [f.key, form.family_plan_sheets[f.key] ?? 0])),
       account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
     fill(res.data)
@@ -99,6 +108,12 @@ async function save() {
             </el-form-item>
           </div>
           <div class="-mt-2 mb-4 text-xs text-muted">Custom app with the <code>sheets:spreadsheet:readonly</code> scope (+ <code>wiki:wiki:readonly</code> for sheets in a wiki).</div>
+          <el-form-item label="Sync every team sheet daily at (Vietnam time)">
+            <el-time-select v-model="form.sheet_sync_at" start="00:00" step="00:30" end="23:30" clearable placeholder="Off" class="!w-40" />
+            <div class="w-full text-xs text-muted">
+              The sheets stay live in Lark; ReportZenE reads them all again at this time each day (and on Sync). {{ lastSync }}
+            </div>
+          </el-form-item>
 
           <h3 class="card-title mt-6">Plan (Etsy › Plan)</h3>
           <el-form-item label="Plan sheet">

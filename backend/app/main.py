@@ -1,4 +1,5 @@
 """ReportZenE API: /api/v1 routes, /mcp for AI agents, SPA from web/dist."""
+import asyncio
 import contextlib
 import logging
 import uuid
@@ -20,6 +21,7 @@ from app.db_migrate import add_missing_columns
 from app.models import User
 from app.routers import auth, plan, report, sheets, tokens, users
 from app.routers import settings as settings_router
+from app.services import sheet_sync
 from app.services.naming import clean_code
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -60,8 +62,14 @@ def create_app(init_db: bool = True) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
-        async with mcp_server.mcp.session_manager.run():
-            yield
+        # the real server (not the tests' app) reads every team sheet again each day
+        daily = asyncio.create_task(sheet_sync.run_forever()) if init_db else None
+        try:
+            async with mcp_server.mcp.session_manager.run():
+                yield
+        finally:
+            if daily:
+                daily.cancel()
 
     app = FastAPI(title="ReportZenE", version="0.1.0", lifespan=lifespan)
     errors.install(app)

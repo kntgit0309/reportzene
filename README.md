@@ -19,7 +19,7 @@ Giao diện theo trackingis (Inter, xanh `#2563eb`, sidebar nhóm Etsy / Lark / 
 | Etsy › Wooden Block, Etsy › Badge Reel | Gộp chung như Flag. **Wooden Block** = 3D Wooden Block, Wooden Block; sheet "KH Wooden Block" có tháng nằm ngay ở dòng tiêu đề ("Shop Name | Team | … | 10-2026"), mỗi tháng một cột. **Badge Reel** = badge reel, shaker badge reel, Badge Reel 2-layers, Badge Buddy, Combo Badge Reel + Buddy, ID Badge Holder; sheet "KH Badge Reel" như KH Flag (một cột Total mỗi tháng). |
 | Etsy › Others | Các sản phẩm của sheet "KH SP khác" (tab Others): **Sticker** (Bumper Sticker, Peeker Sticker, UV DTF Sticker, Car Sticker, UV DTF Car Sticker, Sticker), **Scrub cap**, **Fabric Welcome Sign**, **Baseball Jersey**, và **Other products** = mọi Sub product type trên trackingis chưa thuộc report nào (tự gồm cả loại mới), mở ra theo Product type của trackingis (một truy vấn). KH SP khác lập kế hoạch theo sản phẩm cho cả ZenE (không theo store): so sánh chỉ khi không lọc team / store; bảng theo account chỉ có thực đạt. |
 | Etsy › Plan | Kế hoạch theo product: đọc khối bắt đầu ở **cột Q (17)** của sheet kế hoạch (tab "KH theo Product"), **11 product**: PL2/item, Total Sales, Total PL2, tỷ trọng, Sales/mo, Sales/day, PL2 từng tháng + dòng tổng của sheet. Ô KPI, chart theo tháng. Sheet / cột / số product chọn ở Settings › Plan; dữ liệu là bản Sync gần nhất. |
-| Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc. |
+| Lark › Team sheets | Admin dán link Lark Sheet, chọn tab + hàng tiêu đề → Sync. Mọi người xem/tìm trong snapshot, bấm Sync để đọc lại. Chỉ đọc.  **Tự đồng bộ hằng ngày**: mọi Team sheet được đọc lại lúc 10:00 (giờ VN) mỗi ngày — chỉnh hoặc tắt ở Settings › Lark; sheet Lark từ chối giữ snapshot cũ và báo lỗi. |
 | System › Settings | Token trackingis (mã hoá), team ZenE mặc định, Lark App ID/Secret, sheet kế hoạch (Plan), Test connections, Users (mở khoá / đổi role). |
 
 ## Nguồn dữ liệu trackingis
@@ -56,7 +56,7 @@ Tool (chỉ đọc): `whoami`, `etsy_totals`, `etsy_overview`, `etsy_pl2`, `etsy
 cd backend && uv sync && PYTHONPATH=. uv run python scripts/create_user.py you@example.com "Tên" CODE admin
 uv run uvicorn app.main:app --port 8871        # API + MCP
 cd ../web && npm install && npm run dev        # http://localhost:5177 (proxy → 8871)
-cd ../backend && uv run pytest -q              # 90 test
+cd ../backend && uv run pytest -q              # 93 test
 ```
 
 ## Deploy

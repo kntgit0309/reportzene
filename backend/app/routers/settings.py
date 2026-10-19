@@ -11,7 +11,7 @@ from app.core.responses import ok
 from app.db import get_db
 from app.models import User
 from app.schemas import SettingsIn
-from app.services import report, settings_store
+from app.services import report, settings_store, sheet_sync
 from app.services.lark_sheets import LarkClient, LarkError
 from app.services.trackingis import TrackingisClient, TrackingisError
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("")
 def get_settings(request: Request, db: Session = Depends(get_db), _: User = Depends(admin)) -> dict[str, Any]:
     connected = db.scalar(select(func.count(User.id)).where(User.pod_token.is_not(None)))
-    return ok({**settings_store.status(db), "users_with_sso_token": connected}, request)
+    return ok({**settings_store.status(db), "users_with_sso_token": connected, "sheet_sync_last": sheet_sync.last_run(db)}, request)
 
 
 @router.put("")
@@ -29,7 +29,7 @@ def save_settings(body: SettingsIn, request: Request, db: Session = Depends(get_
     settings_store.save(db, body.model_dump())
     db.commit()
     report.clear_cache()
-    return ok(settings_store.status(db), request, "Saved")
+    return ok({**settings_store.status(db), "sheet_sync_last": sheet_sync.last_run(db)}, request, "Saved")
 
 
 @router.post("/test")

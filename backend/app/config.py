@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     lark_app_id: str = ""
     lark_app_secret: str = ""
     lark_base_url: str = "https://open.larksuite.com"
+    sheet_sync_at: str = "10:00"  # every team sheet is read again daily at this time (HH:MM, app timezone); editable in Settings
     sheet_max_rows: int = 5000
     # Etsy › Plan: the plan-by-product block of a team sheet (sheet picked in Settings; column and count editable there)
     plan_start_column: int = 17  # column Q of the "KH theo Product" tab
