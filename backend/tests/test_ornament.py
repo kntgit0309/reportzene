@@ -43,7 +43,7 @@ def test_ornament_groups_sub_product_types(client, admin, member, upstream):
     data = client.get(url, headers=member).json()["data"]
 
     assert [g["name"] for g in data["groups"]] == [name for name, _ in GROUPS]
-    assert data["groups"][-1]["name"] == "Others" and data["groups"][-1]["children"][-1]["name"] == "Wooden Garland"
+    assert data["groups"][-1]["name"] == "Others" and "Wooden Garland" in [c["name"] for c in data["groups"][-1]["children"]]
     felt = next(g for g in data["groups"] if g["name"] == "Felt")
     n = ORDERS["Felt Ornament"] + ORDERS["Needle Felted Ornament"]
     assert felt["total_order"] == 2 * n and felt["total_revenue"] == 20.0 * n and [d["date_at"] for d in felt["daily"]] == list(DAYS)

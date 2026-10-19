@@ -9,6 +9,14 @@ def test_name_ornament_counts_in_acrylic_wood():
     assert "Name ornament" in dict(GROUPS)["Acrylic + Wood"]
 
 
+def test_unlisted_ornament_sub_types_count_in_others():
+    others = dict(GROUPS)["Others"]
+    for sub in ("2-layer Wood Orn", "ball ornament", "embroidered ornament", "Embroidery Hoop Ornament", "Wooden Garland"):
+        assert sub in others
+    every = [s for _, subs in GROUPS for s in subs]
+    assert len(every) == len(set(every))  # each sub product type in one product type only: nothing counted twice
+
+
 def test_felt_fix_is_170_pieces_spread_over_01_to_18_october():
     assert sum(FELT.values()) == 170 and len(FELT) == 18
     assert min(FELT) == "2026-10-01" and max(FELT) == "2026-10-18" and set(FELT.values()) == {9, 10}
