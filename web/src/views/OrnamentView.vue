@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
 import OrnamentChart from '../components/report/OrnamentChart.vue'
 import OrnamentPlanChart from '../components/report/OrnamentPlanChart.vue'
+import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
 import { auth } from '../lib/auth'
 import { dateTime, money, num, pct } from '../lib/format'
@@ -22,6 +23,8 @@ const loading = ref(false)
 const error = ref('')
 const showChart = ref(true)
 const metric = ref<OrnamentMetric>('total_revenue')
+// The report's views (date, store, seller…) for the same filters, restricted to the ornament sub product types
+const breakdownParams = ref<Record<string, string> | null>(null)
 
 async function load() {
   loading.value = true
@@ -29,6 +32,8 @@ async function load() {
   try {
     data.value = await fetchOrnament(applied.value)
     if (!teamsTouched.value) defaultTeams.value = data.value.query.teams
+    const subs = data.value.groups.flatMap((g) => g.children.map((c) => c.name))
+    breakdownParams.value = { ...applied.value, sub_product_types: subs.join(',') }
   } catch (e) {
     data.value = null
     error.value = (e as Error).message
@@ -215,4 +220,11 @@ function exportCsv() {
       <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others.</template>
     </div>
   </div>
+
+  <ReportBreakdown v-if="breakdownParams" :params="breakdownParams" title="Ornament by date, order, product, store, seller and product type">
+    <div class="mt-2 text-xs text-muted">
+      Same views as Report, for every ornament sub product type above, straight from trackingis
+      <template v-if="data?.fix_note">(without the Felt pieces added by hand)</template>.
+    </div>
+  </ReportBreakdown>
 </template>

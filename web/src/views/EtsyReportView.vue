@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
-import ReportChart from '../components/report/ReportChart.vue'
+import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
-import ReportTable from '../components/report/ReportTable.vue'
 import { money, num } from '../lib/format'
-import { DEFAULT_SORT, downloadCsv, emptyFilters, fetchReport, fetchTotals, filterParams, rowLabel, VIEWS } from '../lib/report'
-import type { Filters, ReportRow, Totals, View } from '../lib/types'
+import { downloadCsv, emptyFilters, fetchTotals, filterParams, rowLabel, VIEWS } from '../lib/report'
+import type { Filters, ReportPage, ReportRow, Totals, View } from '../lib/types'
 
-const PAGE_SIZES = [20, 50, 100, 200]
 const route = useRoute()
 const router = useRouter()
 
@@ -22,33 +20,15 @@ if (typeof route.query.from === 'string' && typeof route.query.to === 'string') 
 const teamsTouched = ref(false)
 const applied = ref<Record<string, string>>(filterParams(filters.value, false))
 
-const table = reactive({ page: 1, perPage: 50, sortBy: DEFAULT_SORT[initialView], sortOrder: 'desc' })
-const rows = ref<ReportRow[]>([])
-const total = ref(0)
+const breakdown = ref<InstanceType<typeof ReportBreakdown> | null>(null)
+const rows = ref<ReportRow[]>([]) // the page the breakdown shows, for the export
 const totals = ref<Totals | null>(null)
 const defaultTeams = ref<string[]>([])
-const loading = ref(false)
 const loadingTotals = ref(false)
-const error = ref('')
-const showChart = ref(true)
-const metric = ref<'total_revenue' | 'total_order' | 'total_quantity'>('total_revenue')
 
-async function loadRows() {
-  loading.value = true
-  error.value = ''
-  try {
-    const page = await fetchReport({ ...applied.value, view: view.value, page: table.page, per_page: table.perPage,
-      sort_by: table.sortBy || DEFAULT_SORT[view.value], sort_order: table.sortOrder || 'desc' })
-    rows.value = page.rows
-    total.value = page.paging.total
-    if (!teamsTouched.value) defaultTeams.value = page.query.teams
-  } catch (e) {
-    rows.value = []
-    total.value = 0
-    error.value = (e as Error).message
-  } finally {
-    loading.value = false
-  }
+function onLoaded(page: ReportPage) {
+  rows.value = page.rows
+  if (!teamsTouched.value) defaultTeams.value = page.query.teams
 }
 
 async function loadTotals() {
@@ -67,10 +47,8 @@ function syncUrl() {
 }
 
 function apply() {
-  applied.value = filterParams(filters.value, teamsTouched.value)
-  table.page = 1
+  applied.value = filterParams(filters.value, teamsTouched.value) // a new object: the breakdown reloads from page 1
   syncUrl()
-  loadRows()
   loadTotals()
 }
 function reset() {
@@ -78,19 +56,9 @@ function reset() {
   teamsTouched.value = false
   apply()
 }
-function changeView(v: View) {
+function onViewChange(v: View) {
   view.value = v
-  table.page = 1
-  table.sortBy = DEFAULT_SORT[v]
-  table.sortOrder = 'desc'
   syncUrl()
-  loadRows()
-}
-function onSort(by: string, order: string) {
-  table.sortBy = by || DEFAULT_SORT[view.value]
-  table.sortOrder = order || 'desc'
-  table.page = 1
-  loadRows()
 }
 
 const kpis = computed(() => {
@@ -105,7 +73,6 @@ const kpis = computed(() => {
   ]
 })
 const subtitle = computed(() => `ZenE Etsy sales from trackingis · ${applied.value.date_from} → ${applied.value.date_to}`)
-const chartable = computed(() => view.value !== 'order' && view.value !== 'product' && rows.value.length > 0)
 
 function exportCsv() {
   const header = ['Name', 'Store', 'Seller', 'Designer', 'Product type', 'Total order', 'Quantity', 'Total', 'Sale tax', 'Revenue']
@@ -115,16 +82,13 @@ function exportCsv() {
   ElMessage.success(`Exported ${body.length} rows (this page)`)
 }
 
-onMounted(() => {
-  loadRows()
-  loadTotals()
-})
+onMounted(loadTotals)
 </script>
 
 <template>
   <PageHeader :subtitle="subtitle">
     <template #actions>
-      <el-button :icon="Refresh" :loading="loading" @click="loadRows(); loadTotals()">Refresh</el-button>
+      <el-button :icon="Refresh" :loading="loadingTotals" @click="breakdown?.reload(); loadTotals()">Refresh</el-button>
       <el-button type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
     </template>
   </PageHeader>
@@ -138,27 +102,5 @@ onMounted(() => {
     </div>
   </div>
 
-  <div class="section-card">
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-      <el-segmented :model-value="view" :options="VIEWS" class="segmented-tabs" @change="(v: View) => changeView(v)" />
-      <div class="flex items-center gap-3">
-        <el-select v-if="chartable && showChart" v-model="metric" size="small" class="!w-[130px]">
-          <el-option label="Revenue" value="total_revenue" />
-          <el-option label="Orders" value="total_order" />
-          <el-option label="Quantity" value="total_quantity" />
-        </el-select>
-        <el-switch v-if="chartable" v-model="showChart" active-text="Chart" />
-      </div>
-    </div>
-
-    <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!mb-3" />
-    <ReportChart v-if="chartable && showChart" :rows="rows" :view="view" :metric="metric" class="mb-3" />
-
-    <ReportTable :rows="rows" :view="view" :loading="loading" :params="applied" :sort-by="table.sortBy" :sort-order="table.sortOrder" @sort="onSort" />
-
-    <div class="mt-3 flex justify-end">
-      <el-pagination v-model:current-page="table.page" v-model:page-size="table.perPage" :page-sizes="PAGE_SIZES" :total="total" background
-                     layout="total, sizes, prev, pager, next" @current-change="loadRows" @size-change="table.page = 1; loadRows()" />
-    </div>
-  </div>
+  <ReportBreakdown ref="breakdown" :params="applied" :initial-view="initialView" @loaded="onLoaded" @view-change="onViewChange" />
 </template>
