@@ -12,7 +12,7 @@ import { dateTime, money, num, pct } from '../lib/format'
 import { downloadCsv, emptyFilters, fetchOrnament, filterParams } from '../lib/report'
 import type { Filters, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
 
-type Row = OrnamentLine & { key: string; children?: Row[] }
+type Row = OrnamentLine & { key: string; gap?: number; children?: Row[] }
 
 const filters = ref<Filters>(emptyFilters())
 const teamsTouched = ref(false)
@@ -53,7 +53,7 @@ function reset() {
 onMounted(load)
 
 const rows = computed<Row[]>(() => (data.value?.groups ?? []).map((g) => ({
-  ...g, key: g.name, children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
+  ...g, key: g.name, gap: gap(g), children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
 })))
 const total = computed(() => data.value?.total)
 const kpis = computed(() => {
@@ -90,6 +90,16 @@ const planKpis = computed(() => {
   ]
 })
 const pcs = (v: number | null | undefined) => (v == null ? '—' : num(Math.round(v)))
+/** Pieces sold minus the plan to date as shown (rounded), so the gap is exactly the difference of the two cells. */
+function gap(r: { total_quantity: number; plan?: number }): number | undefined {
+  return r.plan == null ? undefined : r.total_quantity - Math.round(r.plan)
+}
+const signedPcs = (v: number | null | undefined) => {
+  if (v == null) return ''
+  const n = Math.round(v)
+  return (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n))
+}
+const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
 const bar = (r: number | null | undefined) => (r == null ? 0 : Math.min(100, Math.round(r * 100)))
 const barColor = (r: number | null | undefined) => (r == null ? '#cbd5e1' : r >= 1 ? '#16a34a' : r >= 0.8 ? '#f59e0b' : '#ef4444')
 
@@ -100,7 +110,7 @@ function rowClass({ row }: { row: Row }) {
 function footer(): string[] {
   const t = total.value
   if (!t) return []
-  const planCells = hasPlan.value ? [pcs(t.plan), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gap(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   return ['All ornaments', num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
@@ -108,10 +118,11 @@ const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
   num(r.total_quantity) + (r.fix_quantity ? ` (+${num(r.fix_quantity)})` : '')
 
 function exportCsv() {
-  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Plan to date', '% of plan',
+  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Plan to date', 'Gap', '% of plan',
     'Month plan', 'Revenue', 'Avg order value', 'Share']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
-    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.plan ?? '', r.achieved ?? '', r.plan_month ?? '',
+    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.plan ?? '', r.gap == null ? '' : Math.round(r.gap),
+    r.achieved ?? '', r.plan_month ?? '',
     r.total_revenue, r.avg_order_value, r.share ?? '',
   ]))
   downloadCsv(`ornament-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
@@ -191,6 +202,11 @@ function exportCsv() {
         <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>
           <template #default="{ row }"><span class="num">{{ row.plan == null ? '' : pcs(row.plan) }}</span></template>
         </el-table-column>
+        <el-table-column label="Gap" prop="gap" width="100" align="right" sortable>
+          <template #default="{ row }">
+            <span class="num font-semibold" :class="gapClass(row.gap)" title="Quantity − Plan to date">{{ signedPcs(row.gap) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="% of plan" prop="achieved" width="150" sortable>
           <template #default="{ row }">
             <div v-if="row.plan != null" class="flex items-center gap-2">
@@ -217,7 +233,7 @@ function exportCsv() {
     <div class="mt-2 text-xs text-muted">
       Product types group trackingis sub product types (Wooden Garland is in Others). An order with ornaments of several types
       counts in each, so the rows can add up to a little more than the total.
-      <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others.</template>
+      <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others. Gap = Quantity − Plan to date.</template>
     </div>
   </div>
 
