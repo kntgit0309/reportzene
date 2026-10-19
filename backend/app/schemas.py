@@ -55,6 +55,7 @@ class SettingsIn(BaseModel):
     trackingis_token: str | None = Field(default="", max_length=500)
     default_teams: list[str] | None = Field(default=None, max_length=50)
     lark_app_id: str | None = Field(default=None, max_length=100)
+    sheet_sync_at: str | None = Field(default=None, pattern=r"^(|([01]\d|2[0-3]):[0-5]\d)$")  # daily sync "HH:MM"; "" = off
     lark_app_secret: str | None = Field(default="", max_length=200)
     plan_sheet_id: int | None = Field(default=None, ge=0)  # 0 = no plan sheet
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ

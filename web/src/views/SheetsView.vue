@@ -110,7 +110,7 @@ async function remove(s: Sheet) {
 </script>
 
 <template>
-  <PageHeader subtitle="Reports the team fills in Lark Sheets, read-only. Press Sync to read the sheet again.">
+  <PageHeader subtitle="Reports the team fills in Lark Sheets, read-only. Every sheet is read again daily (time in Settings); press Sync to read one now.">
     <template #actions>
       <el-button v-if="auth.isAdmin.value" type="primary" :icon="Plus" @click="openForm(null)">Add sheet</el-button>
     </template>
