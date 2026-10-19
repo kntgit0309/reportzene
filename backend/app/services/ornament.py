@@ -23,8 +23,9 @@ GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Ceramic", ("Shaped Ornament",)),
     ("Glass", ("Glass Ornament",)),
     ("Felt", ("Felt Ornament", "Needle Felted Ornament")),
+    # Others also takes every other ornament sub product type trackingis lists (checked 19/10/2026)
     ("Others", ("Linen ornament", "Flat Patchwork Ornament", "Quilted Patchwork Ornament", "Patchwork Ornament", "Crochet Ornament",
-                "Wooden Garland")),
+                "Wooden Garland", "2-layer Wood Orn", "ball ornament", "embroidered ornament", "Embroidery Hoop Ornament")),
 )
 ALL_SUB_TYPES = tuple(s for _, subs in GROUPS for s in subs)
 WORKERS = 8
