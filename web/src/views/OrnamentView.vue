@@ -54,7 +54,7 @@ const kpis = computed(() => {
   return [
     { label: 'Revenue', value: t ? money(t.total_revenue) : '—' },
     { label: 'Total orders', value: t ? num(t.total_order) : '—' },
-    { label: 'Quantity', value: t ? num(t.total_quantity) : '—' },
+    { label: 'Quantity', value: t ? num(t.total_quantity) : '—', hint: t?.fix_quantity ? `incl. +${num(t.fix_quantity)} pcs added by hand` : '' },
     { label: 'Avg order value', value: t ? money(t.avg_order_value) : '—' },
     { label: 'Total (incl. tax)', value: t ? money(t.total) : '—' },
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
@@ -68,13 +68,16 @@ function rowClass({ row }: { row: Row }) {
 /** Footer = all ornaments together (an order with several types counts once here). */
 function footer(): string[] {
   const t = total.value
-  return t ? ['All ornaments', num(t.total_order), num(t.total_quantity), money(t.total_revenue), money(t.avg_order_value), pct(1)] : []
+  return t ? ['All ornaments', num(t.total_order), quantity(t), money(t.total_revenue), money(t.avg_order_value), pct(1)] : []
 }
+/** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
+const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
+  num(r.total_quantity) + (r.fix_quantity ? ` (+${num(r.fix_quantity)})` : '')
 
 function exportCsv() {
-  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Revenue', 'Avg order value', 'Share']
+  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Revenue', 'Avg order value', 'Share']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
-    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.total_revenue, r.avg_order_value, r.share ?? '',
+    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', r.total_revenue, r.avg_order_value, r.share ?? '',
   ]))
   downloadCsv(`ornament-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
@@ -96,6 +99,7 @@ function exportCsv() {
     <div v-for="k in kpis" :key="k.label" class="kpi">
       <div class="kpi__label">{{ k.label }}</div>
       <div class="kpi__value">{{ k.value }}</div>
+      <div v-if="k.hint" class="mt-1 text-xs text-amber-600">{{ k.hint }}</div>
     </div>
   </div>
 
@@ -123,8 +127,11 @@ function exportCsv() {
       <el-table-column label="Total order" prop="total_order" width="120" align="right" sortable>
         <template #default="{ row }"><span class="num">{{ num(row.total_order) }}</span></template>
       </el-table-column>
-      <el-table-column label="Quantity" prop="total_quantity" width="110" align="right" sortable>
-        <template #default="{ row }"><span class="num">{{ num(row.total_quantity) }}</span></template>
+      <el-table-column label="Quantity" prop="total_quantity" width="130" align="right" sortable>
+        <template #default="{ row }">
+          <span class="num">{{ num(row.total_quantity) }}</span>
+          <span v-if="row.fix_quantity" class="num text-xs text-amber-600" title="Pieces trackingis misses, added by hand"> (+{{ num(row.fix_quantity) }})</span>
+        </template>
       </el-table-column>
       <el-table-column label="Revenue" prop="total_revenue" width="140" align="right" sortable>
         <template #default="{ row }"><span class="num font-semibold text-slate-900">{{ money(row.total_revenue) }}</span></template>
@@ -136,6 +143,7 @@ function exportCsv() {
         <template #default="{ row }"><span class="num">{{ pct(row.share) }}</span></template>
       </el-table-column>
     </el-table>
+    <div v-if="data?.fix_note" class="mt-2 text-xs text-amber-600">Quantity {{ data.fix_note }}.</div>
     <div class="mt-2 text-xs text-muted">
       Product types group trackingis sub product types (Wooden Garland is in Others). An order with ornaments of several types
       counts in each, so the rows can add up to a little more than the total.

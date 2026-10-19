@@ -6,17 +6,18 @@ so the overall total is its own query rather than the sum of the rows.
 """
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import report
+from app.services import report, settings_store
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError, summarize
 
 # Product type → trackingis sub product types (names exactly as trackingis lists them). Wooden Garland is counted in Others.
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("Acrylic + Wood", ("Cutout Ornament", "Ornament", "Ornament 2-layers")),
+    ("Acrylic + Wood", ("Cutout Ornament", "Ornament", "Ornament 2-layers", "Name ornament")),
     ("Shell", ("Shell ornament",)),
     ("Shaker", ("Shaker Ornament",)),
     ("Ceramic", ("Shaped Ornament",)),
@@ -27,6 +28,21 @@ GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 ALL_SUB_TYPES = tuple(s for _, subs in GROUPS for s in subs)
 WORKERS = 8
+
+
+def _spread(total: int, first: date, days: int) -> dict[str, int]:
+    """`total` split evenly over `days` days from `first` in whole units, the remainder on the first days."""
+    base, extra = divmod(total, days)
+    return {(first + timedelta(days=i)).isoformat(): base + (1 if i < extra else 0) for i in range(days)}
+
+
+# Quantity trackingis misses, added by hand: sub product type → {day: pieces}. Only for the team-wide view (no store,
+# seller, designer or keyword filter; default or every team), since the missing pieces are not tied to a store.
+QUANTITY_FIXES: dict[str, dict[str, int]] = {
+    # trackingis counts a multi-piece Felt Ornament as 1: 170 pcs missing over 01–18/10/2026
+    "Felt Ornament": _spread(170, date(2026, 10, 1), 18),
+}
+FIX_NOTE = "includes pieces trackingis misses, added by hand (Felt Ornament: +170 pcs over 01–18/10/2026)"
 DAY_FIELDS = ("date_at", "total_order", "total_quantity", "total_revenue")
 
 
@@ -51,16 +67,48 @@ def _share(part: float, whole: float) -> float | None:
     return round(part / whole, 4) if whole else None
 
 
+def _fixes_apply(db: Session, q: ReportQuery) -> bool:
+    narrowed = any(q.lists.get(f) for f in ("shops", "sellers", "designers")) or q.texts.get("keyword")
+    teams = q.lists.get("teams") or []
+    return not narrowed and (not teams or teams == settings_store.runtime(db).default_teams)
+
+
+def _with_fixes(days: list[dict[str, Any]], fixes: dict[str, int]) -> list[dict[str, Any]]:
+    """Day rows with the hand-added quantity (new dicts: the cached answer stays as trackingis sent it)."""
+    out = {d["date_at"]: {**d, "total_quantity": (d.get("total_quantity") or 0) + fixes.get(d["date_at"], 0)} for d in days}
+    for day, pcs in fixes.items():
+        out.setdefault(day, {"date_at": day, "total_order": 0, "total_quantity": pcs, "total": 0, "sale_tax": 0, "total_revenue": 0})
+    return sorted(out.values(), key=lambda d: d["date_at"])
+
+
+def _plus_quantity(totals: dict[str, Any], pcs: int) -> dict[str, Any]:
+    return {**totals, "total_quantity": totals["total_quantity"] + pcs, "fix_quantity": pcs} if pcs else totals
+
+
 def ornament_report(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    """{total, groups: [{name, ...totals, share, daily, children: [{name, ...totals, share}]}], query}."""
+    """{total, groups: [{name, ...totals, share, daily, children: [{name, ...totals, share}]}], fix_note, query}.
+
+    Rows carrying hand-added quantity (QUANTITY_FIXES) have `fix_quantity` = the pieces added."""
     q = report.build_query(db, {**params, "view": "date"})
     data = report._call(db, user, report._key("ornament", q), report.CACHE_TTL_S, lambda c: _fetch(c, q))
+    fixes = {s: {d: n for d, n in by_day.items() if q.date_from <= d <= q.date_to} for s, by_day in QUANTITY_FIXES.items()}
+    fixes = {s: by_day for s, by_day in fixes.items() if by_day} if _fixes_apply(db, q) else {}
+
     revenue = data["total"]["total_revenue"]
     groups = []
     for (name, subs), days in zip(GROUPS, data["groups"], strict=True):
+        group_fix: dict[str, int] = {}
+        for s in subs:
+            for d, n in fixes.get(s, {}).items():
+                group_fix[d] = group_fix.get(d, 0) + n
+        days = _with_fixes(days, group_fix) if group_fix else days
         totals = summarize(days)
-        children = [{"name": s, **data["subs"][s], "share": _share(data["subs"][s]["total_revenue"], revenue)} for s in subs]
+        if group_fix:
+            totals["fix_quantity"] = sum(group_fix.values())
+        children = [{"name": s, **_plus_quantity(data["subs"][s], sum(fixes.get(s, {}).values())),
+                     "share": _share(data["subs"][s]["total_revenue"], revenue)} for s in subs]
         groups.append({"name": name, **totals, "share": _share(totals["total_revenue"], revenue), "children": children,
                        "daily": [{f: d.get(f) for f in DAY_FIELDS} for d in days]})
-    return {"total": data["total"], "groups": groups,
+    total = _plus_quantity(data["total"], sum(n for by_day in fixes.values() for n in by_day.values()))
+    return {"total": total, "groups": groups, "fix_note": FIX_NOTE if fixes else None,
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
