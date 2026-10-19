@@ -16,7 +16,7 @@ from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
 from app.services import family_accounts, family_report, report, sheets
-from app.services.families import ORNAMENT, SHIRT
+from app.services.families import FAMILIES, Family
 
 MAX_ROWS = 200
 
@@ -29,8 +29,8 @@ mcp = MCPServer(
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
         "designer or team name into its id (product types and sub product types are filtered by name). "
         "Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
-        "etsy_ornament and etsy_shirt break ornament / shirt sales down by the team's product types, the *_accounts tools per store "
-        "against the KH Ornament / KH Shirt plan. "
+        "etsy_ornament, etsy_shirt, etsy_blanket… break a product family's sales down by the team's product types, the *_accounts "
+        "tools per store against the family's KH plan sheet. "
         "For the team's own reports call list_sheets, then read_sheet (search with q). Everything here is read-only."
     ),
 )
@@ -99,51 +99,38 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
     return _run(ctx, lambda db, u: report.etsy_report(db, params, u))
 
 
-@mcp.tool(description=(
-    "Ornament sales per product type (Acrylic + Wood, Shell, Shaker, Ceramic, Glass, Felt, Others), each with its sub product "
-    "types: total_order, total_quantity, total_revenue, avg_order_value, share of ornament revenue, and per-day rows. "
-    "Same filters as etsy_totals; an order with several ornament types counts in each, so use total for the overall numbers. "
-    "With the KH Ornament plan sheet set, product types and total also have plan (pieces for the range, months pro rata), "
-    "plan_month and achieved (quantity / plan); `plan` says its scope or why there is none."))
-def etsy_ornament(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
-                  teams: str | None = None, keyword: str = "") -> dict:
-    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
-                      keyword=keyword)
-    return _run(ctx, lambda db, u: family_report.family_report(db, ORNAMENT, params, u))
+def _family_tools(family: Family) -> None:
+    """etsy_<family> and etsy_<family>_accounts for a product family with its own Etsy page (families.FAMILIES)."""
+    name, plural = family.name, family.name.lower()
+    types = "; ".join(f"{group} ({', '.join(subs)})" for group, subs in family.groups)
+    children = "product type" if len(family.groups) > 1 else "sub product type (actuals only)"
+
+    def sales(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+              teams: str | None = None, keyword: str = "") -> dict:
+        params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                          keyword=keyword)
+        return _run(ctx, lambda db, u: family_report.family_report(db, family, params, u))
+
+    def accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+                 teams: str | None = None, keyword: str = "") -> dict:
+        params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                          keyword=keyword)
+        return _run(ctx, lambda db, u: family_accounts.accounts_report(db, family, params, u))
+
+    mcp.add_tool(sales, name=f"etsy_{family.key}", description=(
+        f"{name} sales per product type, each with its trackingis sub product types — {types}: total_order, total_quantity, "
+        f"total_revenue, avg_order_value, share of {plural} revenue, and per-day rows. Same filters as etsy_totals; an order "
+        f"with several {plural} types counts in each, so use total for the overall numbers. With the KH {name} plan sheet set, "
+        f"product types and total also have plan (pieces for the range, months pro rata; {family.plan_note}), plan_month and "
+        "achieved (quantity / plan); `plan` says its scope or why there is none."))
+    mcp.add_tool(accounts, name=f"etsy_{family.key}_accounts", description=(
+        f"{name} sales per store (account) next to the store's line of the KH {name} plan: shop, team, in_plan, total_order, "
+        "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
+        f"{children}. Same filters as etsy_{family.key}; stores of the plan first, then stores selling {plural} without a plan line."))
 
 
-@mcp.tool(description=(
-    "Ornament sales per store (account) next to the store's line of the KH Ornament plan: shop, team, in_plan, total_order, "
-    "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
-    "product type. Same filters as etsy_ornament; stores of the plan first, then stores selling ornaments without a plan line."))
-def etsy_ornament_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "",
-                           designers: str = "", teams: str | None = None, keyword: str = "") -> dict:
-    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
-                      keyword=keyword)
-    return _run(ctx, lambda db, u: family_accounts.accounts_report(db, ORNAMENT, params, u))
-
-
-@mcp.tool(description=(
-    "Shirt sales (one product type, Shirt) with its sub product types Shirt, Sweatshirt, No Brand Shirt, Patchwork Shirt, "
-    "Comfort Color and Baby Tee: total_order, total_quantity, total_revenue, avg_order_value, share of shirt revenue, and per-day rows. "
-    "Same filters as etsy_totals. With the KH Shirt plan sheet set, Shirt and total also have plan (pieces for the range, "
-    "months pro rata; T-shirt and Sweatshirt of the plan together), plan_month and achieved; `plan` says its scope or why there is none."))
-def etsy_shirt(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
-               teams: str | None = None, keyword: str = "") -> dict:
-    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
-                      keyword=keyword)
-    return _run(ctx, lambda db, u: family_report.family_report(db, SHIRT, params, u))
-
-
-@mcp.tool(description=(
-    "Shirt sales per store (account) next to the store's line of the KH Shirt plan: shop, team, in_plan, total_order, "
-    "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
-    "sub product type (actuals only). Same filters as etsy_shirt; stores of the plan first, then stores selling shirts without a plan line."))
-def etsy_shirt_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "",
-                        designers: str = "", teams: str | None = None, keyword: str = "") -> dict:
-    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
-                      keyword=keyword)
-    return _run(ctx, lambda db, u: family_accounts.accounts_report(db, SHIRT, params, u))
+for _family in FAMILIES.values():
+    _family_tools(_family)
 
 
 @mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | "

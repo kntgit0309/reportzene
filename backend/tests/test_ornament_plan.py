@@ -77,8 +77,8 @@ def test_ornament_report_compares_quantity_with_the_plan(client, db_factory, adm
                             header=HEADER, rows=ROWS, row_count=len(ROWS))
         s.add(sheet)
         s.commit()
-    assert client.put("/api/v1/settings", json={"ornament_plan_sheet_id": sheet.id}, headers=admin).json()["data"][
-        "ornament_plan_sheet_id"] == sheet.id
+    assert client.put("/api/v1/settings", json={"family_plan_sheets": {"ornament": sheet.id}}, headers=admin).json()["data"][
+        "family_plan_sheets"] == {"ornament": sheet.id}
 
     data = client.get(url, headers=member).json()["data"]
     assert data["plan"]["scope"] == "ZenE" and data["plan"]["sheet"]["name"] == "KH Ornament"

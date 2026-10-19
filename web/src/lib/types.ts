@@ -44,8 +44,8 @@ export type Totals = {
   avg_order_value: number; days: number; date_from: string; date_to: string
 }
 
-/** Product family breakdown (Etsy › Ornament, Etsy › Shirt): one line per product type, its sub product types as children. */
-export type FamilyKey = 'ornament' | 'shirt'
+/** Product family breakdown (Etsy › Ornament, Shirt, Blanket…): one line per product type, its sub product types as children. */
+export type FamilyKey = 'ornament' | 'shirt' | 'blanket'
 export type FamilyLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null

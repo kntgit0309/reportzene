@@ -40,7 +40,7 @@ def plan_sheet(client, db_factory, admin):
                             header=HEADER, rows=ROWS, row_count=len(ROWS))
         s.add(sheet)
         s.commit()
-    client.put("/api/v1/settings", json={"ornament_plan_sheet_id": sheet.id}, headers=admin)
+    client.put("/api/v1/settings", json={"family_plan_sheets": {"ornament": sheet.id}}, headers=admin)
     return sheet
 
 

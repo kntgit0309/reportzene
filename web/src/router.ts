@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { auth } from './lib/auth'
+import { FAMILY_LIST } from './lib/families'
 import AppLayout from './layouts/AppLayout.vue'
 
 declare module 'vue-router' {
@@ -7,7 +8,7 @@ declare module 'vue-router' {
 }
 
 const HOME = '/etsy/report'
-const FamilyView = () => import('./views/FamilyView.vue') // Etsy › Ornament, Etsy › Shirt
+const FamilyView = () => import('./views/FamilyView.vue') // Etsy › Ornament, Shirt, Blanket…
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -19,8 +20,9 @@ export const router = createRouter({
       children: [
         { path: '', redirect: HOME },
         { path: 'etsy/report', component: () => import('./views/EtsyReportView.vue'), meta: { title: 'Report Etsy', group: 'Etsy' } },
-        { path: 'etsy/ornament', component: FamilyView, props: { family: 'ornament' }, meta: { title: 'Ornament report', group: 'Etsy' } },
-        { path: 'etsy/shirt', component: FamilyView, props: { family: 'shirt' }, meta: { title: 'Shirt report', group: 'Etsy' } },
+        ...FAMILY_LIST.map((f) => ({
+          path: `etsy/${f.key}`, component: FamilyView, props: { family: f.key }, meta: { title: `${f.name} report`, group: 'Etsy' },
+        })),
         { path: 'etsy/plan', component: () => import('./views/PlanView.vue'), meta: { title: 'Plan by product', group: 'Etsy' } },
         { path: 'sheets', component: () => import('./views/SheetsView.vue'), meta: { title: 'Team sheets', group: 'Lark' } },
         { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings', group: 'System', adminOnly: true } },
