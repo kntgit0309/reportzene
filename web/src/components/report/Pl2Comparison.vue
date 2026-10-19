@@ -47,8 +47,8 @@ const kpis = computed(() => {
   const cfCards = hasCf.value ? [
     { label: 'PL2 plan (CF)', value: money(t?.plan), hint: `Plan to date ${money(t?.plan_to_date)}` },
     { label: 'PL2 actual (CF)', value: money(t?.actual), hint: 'As finance books it, month so far' },
-    { label: 'Gap (CF)', value: money(t?.gap), color: gapColor(t?.gap ?? undefined), hint: 'Actual − plan (CF)' },
-    { label: '% of plan (CF)', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) },
+    { label: 'Gap (CF)', value: signedMoney(t?.gap) || '—', color: gapColor(t?.gap ?? undefined), hint: 'Actual (CF) − plan to date' },
+    { label: '% of plan (CF)', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) }, // of plan to date
   ] : []
   return [
     ...cfCards,
@@ -100,7 +100,7 @@ function footer(): string[] {
         </el-table-column>
         <el-table-column label="Gap (CF)" prop="gap" min-width="120" align="right">
           <template #default="{ row }">
-            <span class="num font-semibold" :style="{ color: gapColor(row.gap ?? undefined) }" title="Actual − plan (CF)">{{ signedMoney(row.gap) }}</span>
+            <span class="num font-semibold" :style="{ color: gapColor(row.gap ?? undefined) }" title="Actual (CF) − plan to date">{{ signedMoney(row.gap) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="% of plan (CF)" prop="achieved" width="150">
@@ -124,9 +124,11 @@ function footer(): string[] {
       </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-muted">
-      PL2 theo CF: finance's monthly PL2 plan, actual and gap (the running month so far), for B.U ZenE (opens onto each team) or
-      the teams filtered. PL2 theo KT: the estimate above (quantity × the plan's PL2/item) for the report's days of each month.
-      Plan to date counts the CF plan pro rata of those days. KT − CF = PL2 KT − PL2 actual (CF).
+      PL2 theo CF: finance's monthly PL2 plan and actual (the running month so far), for B.U ZenE (opens onto each team) or
+      the teams filtered. PL2 theo KT: the estimate of Sales by product vs plan below (quantity × the plan's PL2/item) for the
+      report's days of each month.
+      Plan to date counts the CF plan pro rata of those days; Gap (CF) = Actual (CF) − Plan to date and % of plan = Actual / Plan
+      to date. KT − CF = PL2 KT − PL2 actual (CF).
     </div>
   </div>
 </template>

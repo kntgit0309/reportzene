@@ -99,6 +99,8 @@ onMounted(loadTotals)
 
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams" @apply="apply" @reset="reset" />
 
+  <Pl2Comparison ref="pl2" :params="applied" />
+
   <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
     <div v-for="k in kpis" :key="k.label" class="kpi">
       <div class="kpi__label">{{ k.label }}</div>
@@ -107,8 +109,6 @@ onMounted(loadTotals)
   </div>
 
   <ProductOverview ref="overview" :params="applied" />
-
-  <Pl2Comparison ref="pl2" :params="applied" />
 
   <ReportBreakdown ref="breakdown" :params="applied" :initial-view="initialView" @loaded="onLoaded" @view-change="onViewChange" />
 </template>
