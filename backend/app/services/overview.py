@@ -55,6 +55,18 @@ def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]
     return out
 
 
+def priced_products(db: Session, user: User | None) -> list[dict[str, Any]]:
+    """[{name, page, sub_types, rate}]: the plan's products with a PL2 per item and sub product types, the basis of PL2 theo KT;
+    [] without a readable plan."""
+    try:
+        sheet_plan = plan.by_product(db)
+    except AppError:
+        return []
+    rates = {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]}
+    lines = products([p["product"] for p in sheet_plan["products"]], [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
+    return [{**line, "rate": rates[line["name"].lower()]} for line in lines if rates.get(line["name"].lower()) is not None and line["sub_types"]]
+
+
 def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery) -> dict[str, Any]:
     every = tuple(dict.fromkeys(s for line in lines for s in line["sub_types"]))
     with ThreadPoolExecutor(max_workers=family_report.WORKERS) as pool:

@@ -15,6 +15,7 @@ type Status = {
   sheet_sync_at: string // daily sync of every team sheet, "HH:MM" Vietnam time; "" = off
   sheet_sync_last?: { day?: string; started_at?: string; finished_at?: string; synced?: number; failed?: number }
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; pl2_cf_sheet_id: number | null
+  pl2_account_sheet_id: number | null; account_list_sheet_id: number | null // PL2 per account (Etsy › Report)
   family_plan_sheets: Partial<Record<FamilyKey, number>> // product family (Etsy › Ornament…) → its plan sheet
   account_replacements: AccountReplacement[]
 }
@@ -24,7 +25,8 @@ const tab = ref('connections')
 const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '', sheet_sync_at: '10:00',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
-  pl2_cf_sheet_id: null as number | null | undefined,
+  pl2_cf_sheet_id: null as number | null | undefined, pl2_account_sheet_id: null as number | null | undefined,
+  account_list_sheet_id: null as number | null | undefined,
   family_plan_sheets: {} as Partial<Record<FamilyKey, number | null>>, account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
 const shops = ref<Option[]>([])
@@ -38,7 +40,7 @@ function fill(s: Status) {
   Object.assign(form, { trackingis_token: '', lark_app_secret: '', lark_app_id: s.lark_app_id, sheet_sync_at: s.sheet_sync_at,
     default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
-    pl2_cf_sheet_id: s.pl2_cf_sheet_id,
+    pl2_cf_sheet_id: s.pl2_cf_sheet_id, pl2_account_sheet_id: s.pl2_account_sheet_id, account_list_sheet_id: s.account_list_sheet_id,
     family_plan_sheets: { ...s.family_plan_sheets }, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
 const lastSync = computed(() => {
@@ -65,7 +67,8 @@ async function save() {
   saving.value = true
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
-      pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0, sheet_sync_at: form.sheet_sync_at || '', // cleared = no daily sync
+      pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0, pl2_account_sheet_id: form.pl2_account_sheet_id ?? 0,
+      account_list_sheet_id: form.account_list_sheet_id ?? 0, sheet_sync_at: form.sheet_sync_at || '', // cleared = no daily sync
       family_plan_sheets: Object.fromEntries(FAMILY_LIST.map((f) => [f.key, form.family_plan_sheets[f.key] ?? 0])),
       account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
     fill(res.data)
@@ -138,6 +141,24 @@ async function save() {
             <div class="text-xs text-muted">
               Finance's "Tổng kết PL Monthly" tab (PL2 theo CF): "B.U | TỔNG | MM-YYYY" header, then the KẾ HOẠCH, THỰC ĐẠT and
               CHÊNH LỆCH rows of B.U ZenE and each team. Etsy › Report compares it with the PL2 estimated from sales (KT).
+            </div>
+          </el-form-item>
+          <el-form-item label="PL2 account sheet (Etsy › Report, PL2 by account)">
+            <el-select v-model="form.pl2_account_sheet_id" clearable placeholder="No PL2 account sheet" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              Finance's "PL Account Etsy_Monthly" tab: MM-YYYY months in the header row, then the PROFIT THỰC ĐẠT section with a
+              "Profit thực đạt &lt;team&gt;" row and one row per account of the team.
+            </div>
+          </el-form-item>
+          <el-form-item label="Account list (names the PL2 account rows)">
+            <el-select v-model="form.account_list_sheet_id" clearable placeholder="No account list" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              "Acc đã bàn giao Seller" (Shop Name and Team columns): the PL2 account sheet names its rows with a QUERY over this list,
+              which Lark does not return, so the k-th row of a team is the team's k-th account here.
             </div>
           </el-form-item>
           <el-form-item v-for="f in FAMILY_LIST" :key="f.key" :label="`${f.name} plan sheet (Etsy › ${f.name})`">
