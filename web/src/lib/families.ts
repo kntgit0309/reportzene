@@ -1,7 +1,7 @@
 // Product families with their own Etsy page; their product types live in the backend (app/services/families.py).
 // Adding one: an entry here (the route, the Etsy menu item and its Settings › Plan picker follow) and one in the backend.
 import type { Component } from 'vue'
-import { Present } from '@element-plus/icons-vue'
+import { Flag, Present } from '@element-plus/icons-vue'
 import BlanketIcon from '../components/icons/BlanketIcon.vue'
 import ShirtIcon from '../components/icons/ShirtIcon.vue'
 import type { FamilyKey } from './types'
@@ -44,6 +44,15 @@ export const FAMILIES: Record<FamilyKey, Family> = {
     planSheetHint: 'The "KH Blanket" tab, same layout; its Velveteen, Woven and Quilted columns are the product types.',
     accountParts: 'Product type',
     accountsNote: 'a store opens onto its product types. Actual: trackingis, blanket sub product types only.',
+  },
+  flag: {
+    key: 'flag', name: 'Flag', plural: 'flags', icon: Flag,
+    groupsNote: 'Flag groups the trackingis sub product types listed under it.',
+    planNote: 'KH Flag has one Total per month, for Flag as a whole.',
+    planSheetHint: 'The "KH Flag" tab: a "Shop Name | Team" label row, then per month a "Total" column only (no categories), in pieces.',
+    accountParts: 'Sub product type',
+    accountsNote: 'a store opens onto its sub product types, actuals only (the plan is for Flag as a whole). Actual: trackingis, '
+      + 'flag sub product types only.',
   },
 }
 export const FAMILY_LIST = Object.values(FAMILIES)

@@ -4,7 +4,8 @@ month and category of the family.
 Layout read from the last sync of the family's sheet picked in Settings › Plan:
   - a label row starting "Shop Name" | "Team" | …, then one block per month: "Total" followed by the categories
     (Ornament: Acrylic, Wood, Shaker, Ceramic, Glass, Shell, Felt, Ornament khác; Shirt: T-shirt, Sweatshirt), each mapped
-    onto a product type of the family (families.Family.plan_group); the month (MM-YYYY) is a column name over the block;
+    onto a product type of the family (families.Family.plan_group), or "Total" alone (Flag), counted as the family's
+    `plan_other`; the month (MM-YYYY) is a column name over the block;
   - every row below with a shop name and a team is that shop's plan (the per-team and total rows are sums, not read).
 Plan sales are pieces, compared with the report's quantity. A month partly in the date range counts pro rata of its days.
 """
@@ -57,10 +58,12 @@ def parse(header: list[str], rows: list[dict[str, Any]], family: Family) -> dict
         while end < len(labels) and labels[end]:
             end += 1
         month = next((k for k in (_month_key(h) for h in header[start:end]) if k), None)
-        if month is None or end == start + 1:
+        if month is None:
             raise _layout_error(family, f'No month (MM-YYYY) over the "Total" block in column {start + 1} of the '
                                         f'{family.name.lower()} plan sheet')
-        blocks.append((month, [(j, family.plan_group(labels[j])) for j in range(start + 1, end)]))
+        # the categories of the month (their Total is their sum), or the Total itself when the plan has no categories
+        cols = range(start + 1, end) if end > start + 1 else range(start, end)
+        blocks.append((month, [(j, family.plan_group(labels[j])) for j in cols]))
     if not blocks:
         raise _layout_error(family, f'The {family.name.lower()} plan sheet has no "Total" month block after the shop columns')
 

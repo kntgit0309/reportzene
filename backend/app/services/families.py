@@ -1,5 +1,5 @@
-"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket): the team's grouping of trackingis sub
-product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt, KH Blanket) maps onto it.
+"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag): the team's grouping of trackingis sub
+product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt, KH Blanket, KH Flag) maps onto it.
 Adding a family: an entry here and in web/src/lib/families.ts; its plan sheet is picked in Settings › Plan."""
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -76,4 +76,14 @@ BLANKET = Family(
     plan_note="the plan's Velveteen, Woven and Quilted are the product types of the same name",
 )
 
-FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET)}
+# One product type, like Shirt; KH Flag has a Total per month and no categories
+FLAG = Family(
+    key="flag",
+    name="Flag",
+    groups=(("Flag", ("Garden Flag", "House Flag", "Flag", "Patchwork Garden Flag", "fan flag", "Banner")),),
+    plan_groups={},
+    plan_other="Flag",
+    plan_note="the plan has one Total per month, for Flag as a whole",
+)
+
+FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG)}
