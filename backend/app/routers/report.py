@@ -8,7 +8,7 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import family_accounts, family_report, report
+from app.services import family_accounts, family_report, overview, report
 from app.services.families import FAMILIES
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
@@ -38,6 +38,12 @@ def etsy_totals(request: Request, db: Session = Depends(get_db), user: User = De
 def options(request: Request, kind: str = Path(pattern=OPTION_KINDS), db: Session = Depends(get_db),
             user: User = Depends(current_user)) -> dict[str, Any]:
     return ok(report.filter_options(db, kind, user), request)
+
+
+@router.get("/overview")
+def product_overview(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Sales of each product of the business plan (Etsy › Plan) against its plan, same filters as the report (Etsy › Report)."""
+    return ok(overview.overview(db, _params(request), user), request)
 
 
 @router.get("/{family}")

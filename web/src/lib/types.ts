@@ -94,6 +94,23 @@ export type FamilyAccountsReport = {
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
+/** Etsy › Report, sales by product vs plan: a product of the business plan (Etsy › Plan) and its ZenE sales. */
+export type OverviewLine = {
+  total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
+  plan?: number | null; plan_month?: number | null; achieved?: number | null // absent without a plan to compare with
+  pl2_plan?: number | null; pl2_est?: number | null // PL2 of the plan for the range; quantity × the plan's PL2/item
+  fix_quantity?: number // pieces trackingis misses, added by hand (Felt Ornament; already inside total_quantity)
+}
+export type OverviewRow = OverviewLine & {
+  name: string; page: FamilyKey | null; sub_types: string[]; share: number | null; pl2_per_item?: number | null
+}
+export type Overview = {
+  rows: OverviewRow[]
+  total: OverviewLine
+  plan: FamilyPlanInfo
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+
 export type Option = { id: number | string; name: string; parent_id?: number | null; type?: string }
 
 export type Filters = {

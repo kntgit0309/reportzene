@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import family_accounts, family_report, report, sheets
+from app.services import family_accounts, family_report, overview, report, sheets
 from app.services.families import FAMILIES, Family
 
 MAX_ROWS = 200
@@ -25,7 +25,8 @@ mcp = MCPServer(
     instructions=(
         "ReportZenE reads ZenE's Etsy sale report from trackingis (production.trackingis.info) and the team's hand-filled "
         "Lark report sheets, with the trackingis rights of the token's owner. Dates are YYYY-MM-DD in Vietnam time; leaving them out means this month so far. "
-        "Start with etsy_totals for the headline numbers, then etsy_report with a view: date (per day), store, seller, "
+        "Start with etsy_totals for the headline numbers and etsy_overview for sales by product against the plan, then "
+        "etsy_report with a view: date (per day), store, seller, "
         "product, product_type or order. Filters take trackingis ids: call filter_options first to turn a store, seller, "
         "designer or team name into its id (product types and sub product types are filtered by name). "
         "Teams default to the ZenE teams set by an admin; pass teams=\"\" for every team. "
@@ -97,6 +98,19 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
                       product_types=product_types, sub_product_types=sub_product_types, teams=teams, keyword=keyword,
                       total_order=total_order, symbol=symbol)
     return _run(ctx, lambda db, u: report.etsy_report(db, params, u))
+
+
+@mcp.tool(description=(
+    "Sales by product against the business plan (Etsy › Plan, KHKD \"KH theo Product\"): one row per plan product (Ornament, "
+    "Blanket, Shirt, Quilted, Flag, Wooden Block, Badge Reel, Sticker, Scrub cap, Fabric Welcome Sign, Baseball Jersey) plus "
+    "Other products (every other trackingis sub product type): total_order, total_quantity, total_revenue, share, plan (pieces for "
+    "the range, months pro rata), plan_month, achieved, pl2_per_item, pl2_plan and pl2_est (quantity × PL2/item). Same filters as "
+    "etsy_totals; the plan is for ZenE as a whole, so it compares only without team / store / seller / designer / keyword filters."))
+def etsy_overview(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+                  teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: overview.overview(db, params, u))
 
 
 def _family_tools(family: Family) -> None:
