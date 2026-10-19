@@ -7,7 +7,7 @@ products" takes every trackingis sub product type none of them covers. Each row 
 types (the report's other filters kept), and the total is one query on all of them: an order holding several products counts
 in each row, so the rows can add up to a little more. Quantity trackingis misses and a family adds by hand (Felt Ornament)
 counts here too, in the team-wide view, as on its page. The plan is for ZenE as a whole, so it compares with the team-wide
-view only. Estimated PL2 = quantity sold × the plan's PL2 per item.
+view only. Estimated PL2 ("PL2 theo KT") = quantity sold × the plan's PL2 per item, for any filters.
 """
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -70,17 +70,20 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
 
 
 def _plan(db: Session, q: ReportQuery) -> dict[str, Any]:
-    """{sheet, months, missing_months, scope, products: {name lower: {plan, plan_month, pl2_per_item, pl2_plan}}, names}
-    for the report's range, or {"error"} when there is no plan or the filters narrow the report below ZenE."""
+    """{sheet, months, missing_months, scope, products: {name lower: {plan, plan_month, pl2_per_item, pl2_plan}}, names,
+    per_item} for the report's range, or {"error"} when there is no plan or the filters narrow the report below ZenE (then
+    still with names and per_item: PL2 per item applies to any part of the sales)."""
     try:
         sheet_plan = plan.by_product(db)
     except AppError as exc:
         return {"error": exc.message}
+    names = [p["product"] for p in sheet_plan["products"]]
+    per_item = {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]}
     teams = q.lists.get("teams") or []
     if (any(q.lists.get(f) for f in ("shops", "sellers", "designers")) or q.texts.get("keyword")
             or (teams and set(teams) != set(settings_store.runtime(db).default_teams))):
         return {"error": f'"{sheet_plan["sheet"]["name"]}" plans per product for ZenE as a whole: clear the team, store, seller, '
-                         f'designer and keyword filters to compare with it', "names": [p["product"] for p in sheet_plan["products"]]}
+                         f'designer and keyword filters to compare with it', "names": names, "per_item": per_item}
     days = family_plan.month_days(q.date_from, q.date_to)
     index = {m: i for i, m in enumerate(sheet_plan["months"])}
     covered = [{"month": m, "days": d, "month_days": md} for m, (d, md) in days.items() if m in index]
@@ -92,7 +95,7 @@ def _plan(db: Session, q: ReportQuery) -> dict[str, Any]:
         out[p["product"].lower()] = {"plan": pcs, "plan_month": sum(sales[index[c["month"]]] or 0 for c in covered),
                                      "pl2_per_item": p["pl2_per_item"], "pl2_plan": profit}
     return {"sheet": sheet_plan["sheet"], "months": covered, "missing_months": [m for m in days if m not in index], "scope": "ZenE",
-            "products": out, "names": [p["product"] for p in sheet_plan["products"]]}
+            "products": out, "names": names, "per_item": per_item}
 
 
 def _metrics(totals: dict[str, Any] | None) -> dict[str, Any]:
@@ -114,12 +117,14 @@ def _with_fix(sold: dict[str, Any], pcs: int) -> dict[str, Any]:
 
 def overview(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{rows: [{name, page, sub_types, …metrics, share, plan, plan_month, achieved, pl2_per_item, pl2_plan, pl2_est}], total,
-    plan, query}. Rows follow the plan's products, then Other products; plan fields are absent when there is no plan."""
+    plan, query}. Rows follow the plan's products, then Other products; plan fields are absent when the plan does not compare
+    (no plan, or filters below ZenE); pl2_per_item / pl2_est are absent only when there is no plan sheet to read."""
     q = report.build_query(db, {**params, "view": "date"})
     plan_info = _plan(db, q)
     names = plan_info.pop("names", [])
     names += [n for n in _default_names() if n.lower() not in {x.lower() for x in names}]  # a page the plan does not list
     by_name = plan_info.pop("products", {})
+    per_item = plan_info.pop("per_item", {})
     lines = products(names, [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
     data = report._call(db, user, report._key("overview", q), report.CACHE_TTL_S, lambda c: _fetch(c, lines, q))
 
@@ -129,20 +134,22 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     for line, got in zip(lines, data["rows"], strict=True):
         sold = _with_fix(_metrics(got), sum(fixes.get(s, 0) for s in line["sub_types"]))
         row = {**line, **sold, "share": round(sold["total_revenue"] / total["total_revenue"], 4) if total["total_revenue"] else None}
+        if per_item:
+            rate = per_item.get(line["name"].lower())
+            row |= {"pl2_per_item": rate, "pl2_est": round(row["total_quantity"] * rate, 2) if rate is not None else None}
         if "error" not in plan_info:
             p = by_name.get(line["name"].lower())
-            per_item = p["pl2_per_item"] if p else None
             row |= {"plan": round(p["plan"], 1) if p else None, "plan_month": round(p["plan_month"]) if p else None,
                     "achieved": round(row["total_quantity"] / p["plan"], 4) if p and p["plan"] else None,
-                    "pl2_per_item": per_item, "pl2_plan": round(p["pl2_plan"], 2) if p else None,
-                    "pl2_est": round(row["total_quantity"] * per_item, 2) if per_item is not None else None}
+                    "pl2_plan": round(p["pl2_plan"], 2) if p else None}
         rows.append(row)
+    if per_item:
+        total["pl2_est"] = round(sum(r["pl2_est"] or 0 for r in rows), 2)
     if "error" not in plan_info:
         planned = list(by_name.values())
         plan_pcs = sum(p["plan"] for p in planned)
         total |= {"plan": round(plan_pcs, 1), "plan_month": round(sum(p["plan_month"] for p in planned)),
                   "achieved": round(total["total_quantity"] / plan_pcs, 4) if plan_pcs else None,
-                  "pl2_plan": round(sum(p["pl2_plan"] for p in planned), 2),
-                  "pl2_est": round(sum(r["pl2_est"] or 0 for r in rows), 2)}
+                  "pl2_plan": round(sum(p["pl2_plan"] for p in planned), 2)}
     return {"rows": rows, "total": total, "plan": plan_info,
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}

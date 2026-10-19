@@ -36,6 +36,7 @@ defineExpose({ reload: load })
 
 const plan = computed(() => data.value?.plan)
 const hasPlan = computed(() => !!plan.value && !plan.value.error)
+const hasKt = computed(() => (data.value?.rows ?? []).some((r) => r.pl2_per_item != null)) // PL2 theo KT, for any filters
 const rows = computed<Row[]>(() => (data.value?.rows ?? []).map((r) => ({ ...r, gap: gapOf(r) })))
 const chartRows = computed(() => rows.value.filter((r) => r.plan || r.total_quantity))
 const total = computed(() => data.value?.total)
@@ -55,7 +56,7 @@ const planKpis = computed(() => {
     { label: 'Gap', value: signedPcs(gap) || '—', color: gapColor(gap), hint: 'Actual − Plan to date' },
     { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) },
     { label: 'PL2 plan to date', value: money(t?.pl2_plan), hint: `Month plan ${pcs(t?.plan_month)} pcs` },
-    { label: 'Est. PL2', value: money(t?.pl2_est), hint: 'Quantity × the plan\'s PL2/item' },
+    { label: 'PL2 KT (est.)', value: money(t?.pl2_est), hint: 'PL2 theo KT: quantity × the plan\'s PL2/item' },
   ]
 })
 
@@ -63,14 +64,14 @@ function footer(): string[] {
   const t = total.value
   if (!t) return []
   const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  const pl2Cells = hasPlan.value ? ['', money(t.pl2_plan), money(t.pl2_est)] : []
+  const pl2Cells = [...(hasKt.value ? [''] : []), ...(hasPlan.value ? [money(t.pl2_plan)] : []), ...(hasKt.value ? [money(t.pl2_est)] : [])]
   const quantity = num(t.total_quantity) + (t.fix_quantity ? ` (+${num(t.fix_quantity)})` : '')
   return ['All products', num(t.total_order), quantity, ...planCells, money(t.total_revenue), pct(1), ...pl2Cells]
 }
 
 function exportCsv() {
   const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
-    'Share', 'PL2/item', 'PL2 plan to date', 'Est. PL2']
+    'Share', 'PL2/item', 'PL2 plan to date', 'PL2 KT (est.)']
   const body = rows.value.map((r) => [r.name, r.sub_types.join(' | '), r.total_order, r.total_quantity, r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.share ?? '', r.pl2_per_item ?? '',
     r.pl2_plan ?? '', r.pl2_est ?? ''])
@@ -150,17 +151,15 @@ function exportCsv() {
       <el-table-column label="Share" prop="share" width="80" align="right">
         <template #default="{ row }"><span class="num">{{ pct(row.share) }}</span></template>
       </el-table-column>
-      <template v-if="hasPlan">
-        <el-table-column label="PL2/item" prop="pl2_per_item" width="80" align="right">
+      <el-table-column v-if="hasKt" label="PL2/item" prop="pl2_per_item" width="80" align="right">
           <template #default="{ row }"><span class="num text-muted">{{ row.pl2_per_item == null ? '' : money(row.pl2_per_item) }}</span></template>
-        </el-table-column>
-        <el-table-column label="PL2 plan to date" prop="pl2_plan" width="120" align="right" sortable>
-          <template #default="{ row }"><span class="num">{{ row.pl2_plan == null ? '' : money(row.pl2_plan) }}</span></template>
-        </el-table-column>
-        <el-table-column label="Est. PL2" prop="pl2_est" width="110" align="right" sortable>
-          <template #default="{ row }"><span class="num font-semibold">{{ row.pl2_est == null ? '' : money(row.pl2_est) }}</span></template>
-        </el-table-column>
-      </template>
+      </el-table-column>
+      <el-table-column v-if="hasPlan" label="PL2 plan to date" prop="pl2_plan" width="120" align="right" sortable>
+        <template #default="{ row }"><span class="num">{{ row.pl2_plan == null ? '' : money(row.pl2_plan) }}</span></template>
+      </el-table-column>
+      <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="pl2_est" width="110" align="right" sortable>
+        <template #default="{ row }"><span class="num font-semibold">{{ row.pl2_est == null ? '' : money(row.pl2_est) }}</span></template>
+      </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-muted">
       One row per product of the plan (Etsy › Plan), sold as the sub product types of its page — open a product for its details.
@@ -168,7 +167,8 @@ function exportCsv() {
       trackingis sub product type no product covers. An order with several products counts in each row, so the rows can add up to a
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
       includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
-      <template v-if="hasPlan">The plan is for ZenE as a whole. Est. PL2 = quantity × the plan's PL2/item.</template>
+      <template v-if="hasPlan">The plan is for ZenE as a whole.</template>
+      <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) below.</template>
     </div>
   </div>
 </template>
