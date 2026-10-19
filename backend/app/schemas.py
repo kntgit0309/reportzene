@@ -1,7 +1,7 @@
 """Request bodies."""
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Role = Literal["member", "admin"]
 
@@ -27,6 +27,26 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class AccountReplacement(BaseModel):
+    """A suspended store and the store that takes over its line of the ornament plan (and its sales) on Etsy › Ornament."""
+
+    suspended: str = Field(min_length=1, max_length=120)
+    replacement: str = Field(min_length=1, max_length=120)
+
+    @field_validator("suspended", "replacement")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Store name is empty")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _different(self) -> "AccountReplacement":
+        if self.suspended.lower() == self.replacement.lower():
+            raise ValueError("A store cannot replace itself")
+        return self
+
+
 class SettingsIn(BaseModel):
     """Secrets: empty string = keep the saved value; null = remove it."""
 
@@ -38,6 +58,7 @@ class SettingsIn(BaseModel):
     plan_start_column: int | None = Field(default=None, ge=1, le=52)  # Lark sheets are read up to column AZ
     plan_products: int | None = Field(default=None, ge=1, le=100)
     ornament_plan_sheet_id: int | None = Field(default=None, ge=0)  # KH Ornament sheet for Etsy › Ornament; 0 = none
+    account_replacements: list[AccountReplacement] | None = Field(default=None, max_length=50)  # null keeps, [] clears
 
 
 LARK_URL = r"^https://[A-Za-z0-9.\-]+\.(larksuite|feishu)\.(com|cn)/"
