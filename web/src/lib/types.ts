@@ -112,18 +112,18 @@ export type Overview = {
 }
 
 /** Etsy › Report, PL2 KT vs CF: finance's monthly PL2 (CF) next to the PL2 estimated from sales (KT), per month. */
-export type Pl2Figures = {
-  plan: number | null; actual: number | null; gap: number | null; achieved: number | null // PL2 theo CF
+export type Pl2Figures = { // PL2 theo CF; gap = actual − plan_to_date, achieved = actual / plan_to_date
+  plan: number | null; plan_to_date: number | null; actual: number | null; gap: number | null; achieved: number | null
 }
 export type Pl2Month = Partial<Pl2Figures> & {
   month: string; days: number; month_days: number
   kt: number | null // PL2 theo KT for the report's days of the month
-  plan_to_date?: number | null; kt_minus_cf?: number | null
+  kt_minus_cf?: number | null
   teams?: (Pl2Figures & { team: string })[] // per-team CF lines, when the whole of ZenE is selected
 }
 export type Pl2Report = {
   months: Pl2Month[]
-  total: Partial<Pl2Figures> & { plan_to_date?: number | null; kt: number | null; kt_minus_cf?: number | null }
+  total: Partial<Pl2Figures> & { kt: number | null; kt_minus_cf?: number | null }
   cf: { error?: string; sheet?: { id: number; name: string; tab_title: string; last_synced_at: string | null }; scope?: string }
   query: { date_from: string; date_to: string; teams: string[] }
 }

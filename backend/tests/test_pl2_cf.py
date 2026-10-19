@@ -23,7 +23,7 @@ ROWS = [
     _row("- Thực đạt Profit PL2 _Etsy 2", 196847.84, 9809.28, 4855.08, -1000),
     _row("- Thực đạt Profit PL2 _Support", 6133.93, 0, 0, 0),
     _row("- TiktokShop Received", 44792.52),  # not a PL2 line
-    _row("CHÊNH LỆCH B.U ZenE", -17141.03, -43685.36, -46560.61, 0),
+    _row("CHÊNH LỆCH B.U ZenE", -17141.03, -43685.36, -46560.61, 0),  # actual − the whole month's plan: computed to date here
     _row("- Chênh lệch PL2_Etsy 1", 48299.88, -4563.71, -23205.55),
     _row("- Chênh lệch PL2_Etsy 2", -39027.16, -23890.72, -21919.92),
     _row("TỶ LỆ HOÀN THÀNH KH B.U", 0.56, 0.44, 0.28),  # computed here, not read
@@ -34,7 +34,7 @@ def test_cf_sheet_is_read_per_line_and_month():
     cf = parse(HEADER, ROWS)
     assert cf["months"] == ["09-2026", "10-2026", "11-2026"]
     assert set(cf["lines"]) == {"zene", "etsy 1", "etsy 2", "support"}
-    assert cf["lines"]["zene"]["plan"]["10-2026"] == 64800 and cf["lines"]["zene"]["gap"]["10-2026"] == -46560.61
+    assert cf["lines"]["zene"]["plan"]["10-2026"] == 64800 and "gap" not in cf["lines"]["zene"]
     assert cf["lines"]["etsy 1"]["actual"]["10-2026"] == 14816.95 and cf["lines"]["support"]["actual"]["09-2026"] == 0
 
 
@@ -54,14 +54,18 @@ def test_pl2_kt_vs_cf_per_month(client, db_factory, admin, member, upstream, bus
     data = client.get(f"{P}?date_from=2026-09-30&date_to=2026-10-02", headers=member).json()["data"]
     assert data["cf"]["scope"] == "B.U ZenE" and [m["month"] for m in data["months"]] == ["09-2026", "10-2026"]
     sep, octo = data["months"]
-    assert octo["plan"] == 64800 and octo["actual"] == 18236.89 and octo["gap"] == -46560.61
-    assert octo["plan_to_date"] == round(64800 * 2 / 31, 2) and octo["achieved"] == round(18236.89 / 64800, 4)
+    to_date = round(64800 * 2 / 31, 2)
+    assert octo["plan"] == 64800 and octo["actual"] == 18236.89 and octo["plan_to_date"] == to_date
+    assert octo["gap"] == round(18236.89 - to_date, 2) and octo["achieved"] == round(18236.89 / to_date, 4)  # against plan to date
     kt = client.get("/api/v1/report/etsy/overview?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]["total"]["pl2_est"]
     assert octo["kt"] == kt and octo["kt_minus_cf"] == round(kt - 18236.89, 2)  # KT for the report's days of the month
     assert sep["days"] == 1 and sep["plan"] == 78200
     assert [t["team"] for t in octo["teams"]] == ["Etsy 1", "Etsy 2", "Support Account"]
-    assert octo["teams"][0]["actual"] == 14816.95 and octo["teams"][2]["plan"] is None
+    etsy1 = octo["teams"][0]
+    assert etsy1["actual"] == 14816.95 and etsy1["gap"] == round(14816.95 - round(38022.5 * 2 / 31, 2), 2)
+    assert octo["teams"][2]["plan"] is None and octo["teams"][2]["gap"] is None
     assert data["total"]["actual"] == round(34514.64 + 18236.89, 2) and data["total"]["plan"] == 78200 + 64800
+    assert data["total"]["gap"] == round(sep["gap"] + octo["gap"], 2)
 
 
 def test_pl2_cf_follows_the_team_filter(client, db_factory, admin, member, upstream, business_plan, monkeypatch):  # noqa: F811
