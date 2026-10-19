@@ -9,6 +9,7 @@ import ProductOverview from '../components/report/ProductOverview.vue'
 import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
 import { money, num } from '../lib/format'
+import { perDay, rangeDays } from '../lib/plan'
 import { downloadCsv, emptyFilters, fetchTotals, filterParams, rowLabel, VIEWS } from '../lib/report'
 import type { Filters, ReportPage, ReportRow, Totals, View } from '../lib/types'
 
@@ -71,6 +72,7 @@ const kpis = computed(() => {
     { label: 'Revenue', value: t ? money(t.total_revenue) : '—' },
     { label: 'Total orders', value: t ? num(t.total_order) : '—' },
     { label: 'Quantity', value: t ? num(t.total_quantity) : '—' },
+    { label: 'Avg sales/day', value: t ? perDay(t.total_quantity, rangeDays(applied.value.date_from, applied.value.date_to)) : '—' },
     { label: 'Avg order value', value: t ? money(t.avg_order_value) : '—' },
     { label: 'Total (incl. tax)', value: t ? money(t.total) : '—' },
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
@@ -101,7 +103,7 @@ onMounted(loadTotals)
 
   <Pl2Comparison ref="pl2" :params="applied" />
 
-  <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+  <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
     <div v-for="k in kpis" :key="k.label" class="kpi">
       <div class="kpi__label">{{ k.label }}</div>
       <div class="kpi__value">{{ k.value }}</div>
