@@ -90,25 +90,38 @@ def month_days(date_from: str, date_to: str) -> dict[str, tuple[int, int]]:
     return out
 
 
-def plan_for(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[str] | None = None,
-             shops: set[str] | None = None) -> dict[str, Any]:
-    """Plan per product type for the range: `plan` (pro rata) and `plan_month` (the whole months touched).
-    `teams` / `shops` (lower-case names) keep those rows only; None = every shop."""
+def shop_plans(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[str] | None = None,
+               shops: set[str] | None = None) -> dict[str, Any]:
+    """Per kept shop, in sheet order: {shop, team, groups: {product type: {plan (pro rata), plan_month}}}, unrounded;
+    plus the months covered and those the sheet has no plan for. `teams` / `shops`: lower-case names, None = every shop."""
     rows = [s for s in parsed["shops"] if (teams is None or s["team"].lower() in teams) and (shops is None or s["shop"].lower() in shops)]
-    groups: dict[str, dict[str, float]] = {}
+    out: list[dict[str, Any]] = [{"shop": s["shop"], "team": s["team"], "groups": {}} for s in rows]
     covered, missing = [], []
     for month, (days, month_len) in month_days(date_from, date_to).items():
         if month not in parsed["months"]:
             missing.append(month)
             continue
         covered.append({"month": month, "days": days, "month_days": month_len})
-        for s in rows:
+        for s, line in zip(rows, out, strict=True):
             for group, pcs in s["plan"].get(month, {}).items():
-                g = groups.setdefault(group, {"plan": 0.0, "plan_month": 0.0})
+                g = line["groups"].setdefault(group, {"plan": 0.0, "plan_month": 0.0})
                 g["plan"] += pcs * days / month_len
                 g["plan_month"] += pcs
+    return {"shops": out, "months": covered, "missing_months": missing}
+
+
+def plan_for(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[str] | None = None,
+             shops: set[str] | None = None) -> dict[str, Any]:
+    """Plan per product type for the range, over the kept shops: `plan` (pro rata) and `plan_month` (the whole months)."""
+    per_shop = shop_plans(parsed, date_from, date_to, teams, shops)
+    groups: dict[str, dict[str, float]] = {}
+    for line in per_shop["shops"]:
+        for group, p in line["groups"].items():
+            g = groups.setdefault(group, {"plan": 0.0, "plan_month": 0.0})
+            g["plan"] += p["plan"]
+            g["plan_month"] += p["plan_month"]
     return {"groups": {k: {"plan": round(v["plan"], 1), "plan_month": round(v["plan_month"])} for k, v in groups.items()},
-            "months": covered, "missing_months": missing, "shops": len(rows)}
+            "months": per_shop["months"], "missing_months": per_shop["missing_months"], "shops": len(per_shop["shops"])}
 
 
 def _names(db: Session, user: User | None, kind: str, ids: list[str]) -> set[str]:
@@ -118,8 +131,9 @@ def _names(db: Session, user: User | None, kind: str, ids: list[str]) -> set[str
     return {n.split(".")[0].strip().lower() for n in names} if kind == "teams" else {n.strip().lower() for n in names}
 
 
-def for_report(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """The ornament plan matching the report's filters, or {"error": why there is none}."""
+def scope(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
+    """{source, parsed, teams, shops, label}: the plan sheet and the teams / stores the report's filters keep,
+    or {"error": why there is no plan to compare with}."""
     rt = settings_store.runtime(db)
     if rt.ornament_plan_sheet_id is None:
         return {"error": "No ornament plan sheet yet: an admin picks it in Settings → Plan"}
@@ -137,8 +151,19 @@ def for_report(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]
         shops = _names(db, user, "shops", q.lists["shops"]) if q.lists.get("shops") else None
     except AppError as exc:
         return {"error": exc.message}
-    result = plan_for(parsed, q.date_from, q.date_to, teams, shops)
-    scope = f"{len(shops)} store(s)" if shops else (", ".join(sorted(t.title() for t in teams)) if teams else "ZenE")
-    return {"sheet": {"id": source.id, "name": source.name, "tab_title": source.tab_title,
-                      "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None},
-            "scope": scope, **result}
+    label = f"{len(shops)} store(s)" if shops else (", ".join(sorted(t.title() for t in teams)) if teams else "ZenE")
+    return {"source": source, "parsed": parsed, "teams": teams, "shops": shops, "label": label}
+
+
+def sheet_info(source: SheetSource) -> dict[str, Any]:
+    return {"id": source.id, "name": source.name, "tab_title": source.tab_title,
+            "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None}
+
+
+def for_report(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
+    """The ornament plan matching the report's filters, or {"error": why there is none}."""
+    s = scope(db, q, user)
+    if "error" in s:
+        return s
+    result = plan_for(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
+    return {"sheet": sheet_info(s["source"]), "scope": s["label"], **result}

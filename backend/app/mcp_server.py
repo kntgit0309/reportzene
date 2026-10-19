@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import ornament, report, sheets
+from app.services import ornament, ornament_accounts, report, sheets
 
 MAX_ROWS = 200
 
@@ -108,6 +108,17 @@ def etsy_ornament(ctx: Context, date_from: str = "", date_to: str = "", shops: s
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
     return _run(ctx, lambda db, u: ornament.ornament_report(db, params, u))
+
+
+@mcp.tool(description=(
+    "Ornament sales per store (account) next to the store's line of the KH Ornament plan: shop, team, in_plan, total_order, "
+    "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
+    "product type. Same filters as etsy_ornament; stores of the plan first, then stores selling ornaments without a plan line."))
+def etsy_ornament_accounts(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "",
+                           designers: str = "", teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: ornament_accounts.accounts_report(db, params, u))
 
 
 @mcp.tool(description="Ids and names for the report filters. kind: shops | sellers | designers | product_types | "

@@ -3,14 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
+import OrnamentAccounts from '../components/report/OrnamentAccounts.vue'
 import OrnamentChart from '../components/report/OrnamentChart.vue'
 import OrnamentPlanChart from '../components/report/OrnamentPlanChart.vue'
 import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
 import { auth } from '../lib/auth'
 import { dateTime, money, num, pct } from '../lib/format'
-import { downloadCsv, emptyFilters, fetchOrnament, filterParams } from '../lib/report'
-import type { Filters, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
+import { bar, barColor, gapClass, gapOf, pcs, signedPcs } from '../lib/plan'
+import { downloadCsv, emptyFilters, fetchOrnament, fetchOrnamentAccounts, filterParams } from '../lib/report'
+import type { Filters, OrnamentAccountsReport, OrnamentLine, OrnamentMetric, OrnamentReport } from '../lib/types'
 
 type Row = OrnamentLine & { key: string; gap?: number; children?: Row[] }
 
@@ -25,10 +27,27 @@ const showChart = ref(true)
 const metric = ref<OrnamentMetric>('total_revenue')
 // The report's views (date, store, seller…) for the same filters, restricted to the ornament sub product types
 const breakdownParams = ref<Record<string, string> | null>(null)
+// Per store (account) against the store's line of the plan: its own request, loaded alongside
+const accounts = ref<OrnamentAccountsReport | null>(null)
+const accountsLoading = ref(false)
+const accountsError = ref('')
 
+async function loadAccounts() {
+  accountsLoading.value = true
+  accountsError.value = ''
+  try {
+    accounts.value = await fetchOrnamentAccounts(applied.value)
+  } catch (e) {
+    accounts.value = null
+    accountsError.value = (e as Error).message
+  } finally {
+    accountsLoading.value = false
+  }
+}
 async function load() {
   loading.value = true
   error.value = ''
+  loadAccounts()
   try {
     data.value = await fetchOrnament(applied.value)
     if (!teamsTouched.value) defaultTeams.value = data.value.query.teams
@@ -53,7 +72,7 @@ function reset() {
 onMounted(load)
 
 const rows = computed<Row[]>(() => (data.value?.groups ?? []).map((g) => ({
-  ...g, key: g.name, gap: gap(g), children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
+  ...g, key: g.name, gap: gapOf(g), children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
 })))
 const total = computed(() => data.value?.total)
 const kpis = computed(() => {
@@ -89,19 +108,6 @@ const planKpis = computed(() => {
     { label: 'Month plan', value: pcs(t?.plan_month), hint: left == null ? '' : `${pcs(left)} pcs still to sell` },
   ]
 })
-const pcs = (v: number | null | undefined) => (v == null ? '—' : num(Math.round(v)))
-/** Pieces sold minus the plan to date as shown (rounded), so the gap is exactly the difference of the two cells. */
-function gap(r: { total_quantity: number; plan?: number }): number | undefined {
-  return r.plan == null ? undefined : r.total_quantity - Math.round(r.plan)
-}
-const signedPcs = (v: number | null | undefined) => {
-  if (v == null) return ''
-  const n = Math.round(v)
-  return (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n))
-}
-const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
-const bar = (r: number | null | undefined) => (r == null ? 0 : Math.min(100, Math.round(r * 100)))
-const barColor = (r: number | null | undefined) => (r == null ? '#cbd5e1' : r >= 1 ? '#16a34a' : r >= 0.8 ? '#f59e0b' : '#ef4444')
 
 function rowClass({ row }: { row: Row }) {
   return row.children ? 'row-parent' : 'row-child'
@@ -110,7 +116,7 @@ function rowClass({ row }: { row: Row }) {
 function footer(): string[] {
   const t = total.value
   if (!t) return []
-  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gap(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   return ['All ornaments', num(t.total_order), quantity(t), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
@@ -236,6 +242,8 @@ function exportCsv() {
       <template v-if="hasPlan">Plan: Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others. Gap = Quantity − Plan to date.</template>
     </div>
   </div>
+
+  <OrnamentAccounts :report="accounts" :loading="accountsLoading" :error="accountsError" :date-from="applied.date_from" :date-to="applied.date_to" />
 
   <ReportBreakdown v-if="breakdownParams" :params="breakdownParams" title="Ornament by date, order, product, store, seller and product type">
     <div class="mt-2 text-xs text-muted">
