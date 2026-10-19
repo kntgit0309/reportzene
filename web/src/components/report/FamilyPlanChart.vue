@@ -2,9 +2,10 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Highcharts from 'highcharts'
 import { pct } from '../../lib/format'
-import type { FamilyGroup } from '../../lib/types'
+// A product type of a family page, or a product of Etsy › Report's overview
+type Line = { name: string; total_quantity: number; plan?: number | null; achieved?: number | null }
 
-const props = defineProps<{ groups: FamilyGroup[] }>()
+const props = defineProps<{ groups: Line[] }>()
 const el = ref<HTMLDivElement | null>(null)
 let chart: Highcharts.Chart | null = null
 

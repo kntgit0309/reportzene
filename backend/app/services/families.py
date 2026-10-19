@@ -124,6 +124,12 @@ OTHERS = Family(
 
 FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}
 
+# Products of the business plan (Etsy › Plan) without a page of their own yet: a row of Etsy › Report's product overview
+# only (on Etsy › Others their sub product types are still among "Other products")
+PLAN_PRODUCTS: dict[str, tuple[str, ...]] = {
+    "Quilted": ("Quilted Laundry Basket", "Quilted Tote Bag", "Quilted Weekend Bag", "Quilted Table Runner"),
+}
+
 
 def with_rest(family: Family, all_sub_types: list[str]) -> Family:
     """The family with its rest group: every trackingis sub product type (in trackingis order) that no family lists.
