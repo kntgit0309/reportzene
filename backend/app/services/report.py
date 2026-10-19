@@ -18,9 +18,11 @@ log = logging.getLogger("rzn.report")
 MAX_RANGE_DAYS = 366
 CACHE_TTL_S = 60  # same filters within a minute reuse the answer (MCP agents and page reloads)
 OPTIONS_TTL_S = 30 * 60
+REFUSED_TTL_S = 15 * 60  # a token trackingis refused is skipped this long (an expired SSO token is replaced at the next sign-in)
 SYMBOLS = (">", ">=", "=", "<=", "<")
 _ID_RE = re.compile(r"^[\w .&'+\-]{1,120}$", re.UNICODE)  # names like "Combo Badge Reel + Buddy"
 _cache: dict[tuple[Any, ...], tuple[float, Any]] = {}
+_refused: dict[str, float] = {}  # token suffix → when trackingis refused it
 _lock = threading.Lock()
 
 
@@ -41,6 +43,18 @@ def _cached(key: tuple[Any, ...], ttl: float, fn: Any) -> Any:
 def clear_cache() -> None:
     with _lock:
         _cache.clear()
+        _refused.clear()
+
+
+def _recently_refused(token: str) -> bool:
+    with _lock:
+        at = _refused.get(token[-12:])
+    return at is not None and time.monotonic() - at < REFUSED_TTL_S
+
+
+def _mark_refused(token: str) -> None:
+    with _lock:
+        _refused[token[-12:]] = time.monotonic()
 
 
 def _date(value: str | None, field: str, default: date) -> date:
@@ -108,9 +122,15 @@ def tokens_for(db: Session, user: User | None) -> list[tuple[str, str]]:
 
 
 def _call(db: Session, user: User | None, kind: tuple[Any, ...], ttl: float, fn: Any) -> Any:
-    """Run fn(client) with the first token trackingis accepts; answers are cached per token (rights differ per account)."""
+    """Run fn(client) with the first token trackingis accepts; answers are cached per token (rights differ per account).
+
+    A refused token is skipped for REFUSED_TTL_S, otherwise every request (even a cached one) would first wait for
+    trackingis to refuse it again. The last token is always tried, so a real error still reaches the user."""
     last: TrackingisError | None = None
-    for source, token in tokens_for(db, user):
+    tokens = tokens_for(db, user)
+    for i, (source, token) in enumerate(tokens):
+        if i < len(tokens) - 1 and _recently_refused(token):
+            continue
         client = TrackingisClient(token)
         try:
             return _cached((token[-12:], *kind), ttl, lambda c=client: fn(c))
@@ -118,7 +138,9 @@ def _call(db: Session, user: User | None, kind: tuple[Any, ...], ttl: float, fn:
             last = exc
             if not exc.auth_failed:
                 break
-            log.info("trackingis refused the %s token of user %s, trying the next one", source, user.id if user else "-")
+            _mark_refused(token)
+            log.info("trackingis refused the %s token of user %s (%s), skipping it for %d min", source, user.id if user else "-",
+                     exc, REFUSED_TTL_S // 60)
     assert last is not None
     raise AppError(last.status, "TRACKINGIS_ERROR", str(last)) from last
 

@@ -145,3 +145,20 @@ def test_sso_user_reads_with_own_token_then_falls_back_to_shared(client, db_fact
     res = client.get(f"{R}?view=seller")
     assert res.status_code == 200
     assert [r.headers["authorization"] for r in upstream[-2:]] == ["Bearer expired", "Bearer tis-token"]
+
+    # Refused once, then skipped: the next requests go straight to the shared token
+    assert client.get(f"{R}?view=product_type").status_code == 200
+    assert [r.headers["authorization"] for r in upstream].count("Bearer expired") == 1
+    assert upstream[-1].headers["authorization"] == "Bearer tis-token"
+
+
+def test_settings_test_checks_the_admins_own_sso_token(client, db_factory, admin, upstream):
+    _save_token(client, admin)
+    with db_factory() as s:
+        from app.models import User
+        from app.services import settings_store
+        s.query(User).filter_by(email="boss@zene.test").one().pod_token = settings_store.encrypt("expired")
+        s.commit()
+    out = client.post("/api/v1/settings/test", headers=admin).json()["data"]
+    assert out["trackingis"]["ok"] is True
+    assert out["trackingis (your SSO token)"]["ok"] is False and "expired" in out["trackingis (your SSO token)"]["message"]

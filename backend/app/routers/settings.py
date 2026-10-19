@@ -33,8 +33,8 @@ def save_settings(body: SettingsIn, request: Request, db: Session = Depends(get_
 
 
 @router.post("/test")
-def test_connections(request: Request, db: Session = Depends(get_db), _: User = Depends(admin)) -> dict[str, Any]:
-    """Try the saved trackingis token and Lark app: {trackingis: {ok, message}, lark: {ok, message}}."""
+def test_connections(request: Request, db: Session = Depends(get_db), user: User = Depends(admin)) -> dict[str, Any]:
+    """Try the saved trackingis token, the admin's own SSO token and the Lark app: {name: {ok, message}}."""
     rt = settings_store.runtime(db)
     out: dict[str, Any] = {}
     try:
@@ -42,6 +42,13 @@ def test_connections(request: Request, db: Session = Depends(get_db), _: User = 
         out["trackingis"] = {"ok": True, "message": f"Token works ({len(teams)} teams visible)"}
     except TrackingisError as exc:
         out["trackingis"] = {"ok": False, "message": str(exc)}
+    own = settings_store.decrypt(user.pod_token) if user.pod_token else ""
+    if own:  # reports try it first: a refused one means they run on the shared token
+        try:
+            teams = TrackingisClient(own).options("teams")
+            out["trackingis (your SSO token)"] = {"ok": True, "message": f"Your Isuccess System token works ({len(teams)} teams visible)"}
+        except TrackingisError as exc:
+            out["trackingis (your SSO token)"] = {"ok": False, "message": f"{exc}. Reports use the shared token for you meanwhile."}
     if not rt.lark_ready:
         out["lark"] = {"ok": False, "message": "Lark App ID / App Secret not set"}
     else:

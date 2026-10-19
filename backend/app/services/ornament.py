@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import User
 from app.services import report
-from app.services.trackingis import ReportQuery, TrackingisClient, summarize
+from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError, summarize
 
 # Product type → trackingis sub product types (names exactly as trackingis lists them). Wooden Garland is counted in Others.
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -40,7 +40,11 @@ def _fetch(client: TrackingisClient, q: ReportQuery) -> dict[str, Any]:
         total = pool.submit(client.totals, _only(q, ALL_SUB_TYPES))
         groups = [pool.submit(client.daily, _only(q, subs)) for _, subs in GROUPS]
         subs = {s: pool.submit(client.totals, _only(q, (s,))) for s in ALL_SUB_TYPES}
-        return {"total": total.result(), "groups": [g.result() for g in groups], "subs": {s: f.result() for s, f in subs.items()}}
+        try:
+            return {"total": total.result(), "groups": [g.result() for g in groups], "subs": {s: f.result() for s, f in subs.items()}}
+        except TrackingisError:
+            pool.shutdown(cancel_futures=True)  # a refused token fails every query: don't send the ones still queued
+            raise
 
 
 def _share(part: float, whole: float) -> float | None:

@@ -1,10 +1,11 @@
+import time
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
 
 from app.services import trackingis
-from app.services.ornament import ALL_SUB_TYPES, GROUPS
+from app.services.ornament import ALL_SUB_TYPES, GROUPS, WORKERS
 from tests.test_report import _save_token
 
 O = "/api/v1/report/etsy/ornament"
@@ -19,6 +20,9 @@ def upstream(monkeypatch):
 
     def handler(req: httpx.Request) -> httpx.Response:
         calls.append(req)
+        if req.headers.get("authorization") == "Bearer expired":
+            time.sleep(0.05)  # network latency: the queries still queued behind the running ones get cancelled
+            return httpx.Response(401, json={"message": "Unauthenticated."})
         n = sum(ORDERS[s] for s in parse_qs(urlparse(str(req.url)).query).get("sub_product_types[]", []))
         rows = [{"date_at": d, "total_order": n, "total_quantity": 2 * n, "total": 11.0 * n, "sale_tax": 1.0 * n, "total_revenue": 10.0 * n}
                 for d in DAYS]
@@ -54,3 +58,22 @@ def test_ornament_groups_sub_product_types(client, admin, member, upstream):
         assert q["view"] == ["date"] and q["shops[]"] == ["5"] and q["teams[]"] == ["12"] and "product_types[]" not in q
     client.get(url, headers=member)
     assert len(upstream) == 1 + len(GROUPS) + len(ALL_SUB_TYPES)  # same filters within a minute: cached
+
+
+def test_refused_own_token_stops_early_then_is_skipped(client, db_factory, admin, member, upstream):
+    _save_token(client, admin)
+    with db_factory() as s:
+        from app.models import User
+        from app.services import settings_store
+        s.query(User).filter_by(email="khoa@zene.test").one().pod_token = settings_store.encrypt("expired")
+        s.commit()
+    all_queries = 1 + len(GROUPS) + len(ALL_SUB_TYPES)
+
+    assert client.get(f"{O}?date_from=2026-10-01&date_to=2026-10-02", headers=member).status_code == 200
+    refused = [r for r in upstream if r.headers["authorization"] == "Bearer expired"]
+    # the running queries, and at most one more each picked up before the cancel: the rest of the queue is never sent
+    assert 1 <= len(refused) <= 2 * WORKERS < all_queries
+
+    upstream.clear()
+    assert client.get(f"{O}?date_from=2026-10-02&date_to=2026-10-02", headers=member).status_code == 200
+    assert len(upstream) == all_queries and all(r.headers["authorization"] == "Bearer tis-token" for r in upstream)
