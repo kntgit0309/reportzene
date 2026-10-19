@@ -1,6 +1,6 @@
 // Report Etsy: filters → query string for /report/etsy, date shortcuts, CSV export.
 import { api } from './api'
-import type { FamilyAccountsReport, FamilyKey, FamilyReport, Filters, Option, Overview, Pl2Report, ReportPage, ReportRow, Totals, View } from './types'
+import type { FamilyAccountsReport, FamilyKey, FamilyReport, Filters, Option, Overview, Pl2Accounts, Pl2Report, ReportPage, ReportRow, Totals, View } from './types'
 
 export const VIEWS: { value: View; label: string }[] = [
   { value: 'date', label: 'Date' },
@@ -63,6 +63,8 @@ export const fetchReport = (p: Record<string, string | number>) => api.get<Repor
 export const fetchTotals = (p: Record<string, string | number>) => api.get<Totals>(`/report/etsy/totals${toQuery(p)}`).then((r) => r.data)
 export const fetchOverview = (p: Record<string, string | number>) => api.get<Overview>(`/report/etsy/overview${toQuery(p)}`).then((r) => r.data)
 export const fetchPl2 = (p: Record<string, string | number>) => api.get<Pl2Report>(`/report/etsy/pl2${toQuery(p)}`).then((r) => r.data)
+export const fetchPl2Accounts = (p: Record<string, string | number>) =>
+  api.get<Pl2Accounts>(`/report/etsy/pl2/accounts${toQuery(p)}`).then((r) => r.data)
 export const fetchFamily = (family: FamilyKey, p: Record<string, string | number>) =>
   api.get<FamilyReport>(`/report/etsy/${family}${toQuery(p)}`).then((r) => r.data)
 export const fetchFamilyAccounts = (family: FamilyKey, p: Record<string, string | number>) =>

@@ -128,6 +128,20 @@ export type Pl2Report = {
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
+/** PL2 per account: PL2 theo KT (quantity × the plan's PL2/item) and finance's PROFIT THỰC ĐẠT (PL2 theo CF); null = not available */
+export type Pl2AccountLine = {
+  shop: string; team: string | null; quantity: number; kt: number | null; cf: number | null; kt_minus_cf: number | null
+}
+type SheetRef = { id: number; name: string; tab_title: string; last_synced_at: string | null }
+export type Pl2Accounts = {
+  accounts: Pl2AccountLine[] // the accounts of the KH plan sheets, in sheet order
+  others: Pl2AccountLine & { count: number; children: Pl2AccountLine[] } // accounts outside the plans with a PL2
+  total: Pl2AccountLine
+  kt: { error?: string }
+  cf: { error?: string; sheet?: SheetRef; list?: SheetRef; months?: string[]; warnings?: string[] }
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+
 export type Option = { id: number | string; name: string; parent_id?: number | null; type?: string }
 
 export type Filters = {
