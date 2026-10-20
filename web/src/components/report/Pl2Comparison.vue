@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type VNode } from 'vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, pct } from '../../lib/format'
-import { bar, barColor, CF_COLOR, gapColor } from '../../lib/plan'
+import { bar, barColor, cfColor, cfTotal, gapColor } from '../../lib/plan'
 import { fetchPl2 } from '../../lib/report'
 import type { Pl2Month, Pl2Report } from '../../lib/types'
 
@@ -46,7 +46,7 @@ const kpis = computed(() => {
   const t = total.value
   const cfCards = hasCf.value ? [
     { label: 'PL2 plan (CF)', value: money(t?.plan), hint: `Plan to date ${money(t?.plan_to_date)}` },
-    { label: 'PL2 actual (CF)', value: money(t?.actual), color: CF_COLOR, hint: 'As finance books it, month so far' },
+    { label: 'PL2 actual (CF)', value: money(t?.actual), color: cfColor(t?.actual), hint: 'As finance books it, month so far' },
     { label: 'Gap (CF)', value: signedMoney(t?.gap) || '—', color: gapColor(t?.gap ?? undefined), hint: 'Actual (CF) − plan to date' },
     { label: '% of plan (CF)', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) }, // of plan to date
   ] : []
@@ -57,10 +57,10 @@ const kpis = computed(() => {
   ]
 })
 const rowClass = ({ row }: { row: Row }) => (row.children ? 'row-parent' : 'row-child')
-function footer(): string[] {
+function footer(): (string | VNode)[] {
   const t = total.value
   if (!t) return []
-  const cfCells = hasCf.value ? [money(t.plan), money(t.plan_to_date), money(t.actual), signedMoney(t.gap), pct(t.achieved, 0)] : []
+  const cfCells = hasCf.value ? [money(t.plan), money(t.plan_to_date), cfTotal(t.actual, money(t.actual)), signedMoney(t.gap), pct(t.achieved, 0)] : []
   return ['All months', ...cfCells, money(t.kt), ...(hasCf.value ? [signedMoney(t.kt_minus_cf)] : [])]
 }
 </script>
@@ -96,7 +96,7 @@ function footer(): string[] {
           <template #default="{ row }"><span class="num text-muted">{{ row.plan_to_date == null ? '' : money(row.plan_to_date) }}</span></template>
         </el-table-column>
         <el-table-column label="Actual (CF)" prop="actual" min-width="120" align="right" class-name="cf-cell">
-          <template #default="{ row }"><span class="num">{{ row.actual == null ? '' : money(row.actual) }}</span></template>
+          <template #default="{ row }"><span class="num" :style="{ color: cfColor(row.actual) }">{{ row.actual == null ? '' : money(row.actual) }}</span></template>
         </el-table-column>
         <el-table-column label="Gap (CF)" prop="gap" min-width="120" align="right">
           <template #default="{ row }">

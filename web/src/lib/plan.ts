@@ -1,4 +1,5 @@
 // Plan vs actual (Etsy › Ornament, Etsy › Shirt): pieces, gap, % of plan bars — shared by the product type and account tables.
+import { h, type VNode } from 'vue'
 import { num, num1 } from './format'
 
 /** Calendar days of a date range, both ends included: 2026-10-01 → 2026-10-19 is 19 days. */
@@ -30,8 +31,11 @@ export function signedPcs(v: number | null | undefined): string {
 export const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
 /** The same as a colour, where a utility class would lose to a component style (KPI values). */
 export const gapColor = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? undefined : v < 0 ? '#dc2626' : '#16a34a')
-/** Finance's PL2 actual (PL2 theo CF), in blue to stand out (KPI values; table columns use the cf-cell class). */
+/** Finance's PL2 actual (PL2 theo CF): blue to stand out, red when negative (KPI values, table cells and totals). */
 export const CF_COLOR = '#2563eb'
+export const cfColor = (v: number | null | undefined) => (v != null && Math.round(v * 100) < 0 ? '#dc2626' : CF_COLOR)
+/** A CF figure in a table total row, coloured like the cells (summary-method cells are plain text otherwise). */
+export const cfTotal = (v: number | null | undefined, text: string): VNode => h('span', { style: { color: cfColor(v) } }, text)
 
 /** Width of a % of plan bar (capped at 100) and its colour: green from 100 %, amber from 80 %, red below. */
 export const bar = (r: number | null | undefined) => (r == null ? 0 : Math.min(100, Math.round(r * 100)))
