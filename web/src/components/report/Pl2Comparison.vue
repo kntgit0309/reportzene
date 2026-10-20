@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, pct } from '../../lib/format'
-import { bar, barColor, gapColor } from '../../lib/plan'
+import { bar, barColor, CF_COLOR, gapColor } from '../../lib/plan'
 import { fetchPl2 } from '../../lib/report'
 import type { Pl2Month, Pl2Report } from '../../lib/types'
 
@@ -46,7 +46,7 @@ const kpis = computed(() => {
   const t = total.value
   const cfCards = hasCf.value ? [
     { label: 'PL2 plan (CF)', value: money(t?.plan), hint: `Plan to date ${money(t?.plan_to_date)}` },
-    { label: 'PL2 actual (CF)', value: money(t?.actual), hint: 'As finance books it, month so far' },
+    { label: 'PL2 actual (CF)', value: money(t?.actual), color: CF_COLOR, hint: 'As finance books it, month so far' },
     { label: 'Gap (CF)', value: signedMoney(t?.gap) || '—', color: gapColor(t?.gap ?? undefined), hint: 'Actual (CF) − plan to date' },
     { label: '% of plan (CF)', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) }, // of plan to date
   ] : []
@@ -95,8 +95,8 @@ function footer(): string[] {
         <el-table-column label="Plan to date" prop="plan_to_date" min-width="120" align="right">
           <template #default="{ row }"><span class="num text-muted">{{ row.plan_to_date == null ? '' : money(row.plan_to_date) }}</span></template>
         </el-table-column>
-        <el-table-column label="Actual (CF)" prop="actual" min-width="120" align="right">
-          <template #default="{ row }"><span class="num font-semibold text-slate-900">{{ row.actual == null ? '' : money(row.actual) }}</span></template>
+        <el-table-column label="Actual (CF)" prop="actual" min-width="120" align="right" class-name="cf-cell">
+          <template #default="{ row }"><span class="num">{{ row.actual == null ? '' : money(row.actual) }}</span></template>
         </el-table-column>
         <el-table-column label="Gap (CF)" prop="gap" min-width="120" align="right">
           <template #default="{ row }">

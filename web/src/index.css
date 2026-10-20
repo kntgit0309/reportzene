@@ -71,3 +71,5 @@ body { margin: 0; font-family: var(--el-font-family); background: var(--el-bg-co
 .kpi__label { font-size: 12px; color: var(--el-text-color-secondary); }
 .kpi__value { margin-top: 6px; font-size: 22px; font-weight: 700; color: var(--el-text-color-primary); font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
 .el-table .tree-cell .cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* PL2 actual (CF) columns, rows and footer: blue to stand out (CF_COLOR) */
+.el-table td.cf-cell .cell { color: #2563eb; font-weight: 600; }
