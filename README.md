@@ -65,6 +65,8 @@ cd ../backend && uv run pytest -q              # 93 test
 chạy `deploy/autodeploy.sh` mỗi phút: thấy commit mới → `pytest` → build web → rsync sang `~/reportzene` → restart → health check.
 Test hoặc build lỗi thì **không deploy** commit đó (và không thử lại tới khi có commit mới).
 Xem kết quả: `ssh macminiwork tail -20 ~/reportzene-autodeploy/autodeploy.log` (log test/build: `last_tests.log`, `last_build.log`).
+Không có SSH: so tên `assets/index-*.js` trong HTML của https://reportzene.trackingis.info với bản build của commit mới (`npm run build`);
+nếu sau vài phút vẫn là bản cũ thì đẩy một commit mới lên `main` để autodeploy thử lại.
 Clone dùng deploy key read-only `~/.ssh/reportzene_deploy` (host alias `github-reportzene`).
 
 **Tay** (khi cần đổi plist launchd: SSO key/secret, allow-list):
