@@ -4,7 +4,7 @@ import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num } from '../../lib/format'
-import { gapColor, perDay, perDayValue, rangeDays } from '../../lib/plan'
+import { CF_COLOR, gapColor, perDay, perDayValue, rangeDays } from '../../lib/plan'
 import { downloadCsv, fetchPl2Accounts } from '../../lib/report'
 import type { Pl2AccountLine, Pl2Accounts } from '../../lib/types'
 
@@ -69,7 +69,7 @@ const kpis = computed(() => {
     { label: 'Accounts in KH', value: d ? num(d.accounts.length) : '—', hint: d?.others.count ? `+ ${d.others.count} other accounts with a PL2` : 'Stores of the KH plan sheets' },
     ...(hasKt.value ? [{ label: 'PL2 KT (est.)', value: money(t?.kt), hint: 'Quantity × the plan\'s PL2/item' }] : []),
     ...(hasCf.value ? [
-      { label: 'PL2 CF (actual)', value: money(t?.cf), color: gapColor(t?.cf), hint: `PROFIT THỰC ĐẠT, ${cfMonths.value || 'months of the range'}` },
+      { label: 'PL2 CF (actual)', value: money(t?.cf), color: CF_COLOR, hint: `PROFIT THỰC ĐẠT, ${cfMonths.value || 'months of the range'}` },
     ] : []),
     ...(hasKt.value && hasCf.value ? [{ label: 'CF − KT', value: signedMoney(t?.cf_minus_kt) || '—', color: gapColor(t?.cf_minus_kt), hint: 'PL2 CF − PL2 KT' }] : []),
   ]
@@ -139,10 +139,8 @@ function exportCsv() {
       <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="kt" min-width="120" align="right" sortable>
         <template #default="{ row }"><span class="num font-semibold">{{ row.kt == null ? '' : money(row.kt) }}</span></template>
       </el-table-column>
-      <el-table-column v-if="hasCf" label="PL2 CF (actual)" prop="cf" min-width="125" align="right" sortable>
-        <template #default="{ row }">
-          <span class="num font-semibold" :style="{ color: gapColor(row.cf) }">{{ row.cf == null ? '' : money(row.cf) }}</span>
-        </template>
+      <el-table-column v-if="hasCf" label="PL2 CF (actual)" prop="cf" min-width="125" align="right" sortable class-name="cf-cell">
+        <template #default="{ row }"><span class="num">{{ row.cf == null ? '' : money(row.cf) }}</span></template>
       </el-table-column>
       <el-table-column v-if="hasKt && hasCf" label="CF − KT" prop="cf_minus_kt" min-width="120" align="right" sortable>
         <template #default="{ row }">
