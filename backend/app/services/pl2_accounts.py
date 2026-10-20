@@ -1,5 +1,5 @@
 """Etsy › Report, PL2 per account: for each account of the plans (the stores of the KH sheets), PL2 theo KT (its quantity of
-each plan product × that product's PL2 per item) next to PL2 theo CF (finance's "PROFIT THỰC ĐẠT" of the account). Accounts
+each plan product × that product's PL2 per item; Other products at theirs from Settings › Plan) next to PL2 theo CF (finance's "PROFIT THỰC ĐẠT" of the account). Accounts
 outside the plans that have a PL2 go together under "Other accounts".
 
 PL2 theo CF comes from the "PL Account Etsy_Monthly" tab (Settings › Plan › PL2 account sheet): a header row "… | MM-YYYY…",

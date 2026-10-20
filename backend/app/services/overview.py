@@ -7,7 +7,8 @@ products" takes every trackingis sub product type none of them covers. Each row 
 types (the report's other filters kept), and the total is one query on all of them: an order holding several products counts
 in each row, so the rows can add up to a little more. Quantity trackingis misses and a family adds by hand (Felt Ornament)
 counts here too, in the team-wide view, as on its page. The plan is for ZenE as a whole, so it compares with the team-wide
-view only. Estimated PL2 ("PL2 theo KT") = quantity sold × the plan's PL2 per item, for any filters.
+view only. Estimated PL2 ("PL2 theo KT") = quantity sold × the plan's PL2 per item, for any filters; KHKD has no line for
+Other products, so theirs is set in Settings › Plan ($7 per item unless changed).
 """
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -55,6 +56,12 @@ def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]
     return out
 
 
+def _with_rest(db: Session, rates: dict[str, Any]) -> dict[str, Any]:
+    """The plan's PL2 per item (product lower case → $), plus Other products' from Settings › Plan when the plan has none."""
+    rate = settings_store.runtime(db).other_pl2_per_item
+    return rates if rate is None or rates.get(REST.lower()) is not None else {**rates, REST.lower(): rate}
+
+
 def priced_products(db: Session, user: User | None) -> list[dict[str, Any]]:
     """[{name, page, sub_types, rate}]: the plan's products with a PL2 per item and sub product types, the basis of PL2 theo KT;
     [] without a readable plan."""
@@ -62,7 +69,7 @@ def priced_products(db: Session, user: User | None) -> list[dict[str, Any]]:
         sheet_plan = plan.by_product(db)
     except AppError:
         return []
-    rates = {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]}
+    rates = _with_rest(db, {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]})
     lines = products([p["product"] for p in sheet_plan["products"]], [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
     return [{**line, "rate": rates[line["name"].lower()]} for line in lines if rates.get(line["name"].lower()) is not None and line["sub_types"]]
 
@@ -137,6 +144,8 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     names += [n for n in _default_names() if n.lower() not in {x.lower() for x in names}]  # a page the plan does not list
     by_name = plan_info.pop("products", {})
     per_item = plan_info.pop("per_item", {})
+    if per_item:  # with a plan, Other products count at their PL2 per item too
+        per_item = _with_rest(db, per_item)
     lines = products(names, [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
     data = report._call(db, user, report._key("overview", q), report.CACHE_TTL_S, lambda c: _fetch(c, lines, q))
 

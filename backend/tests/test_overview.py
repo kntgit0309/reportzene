@@ -88,3 +88,17 @@ def test_overview_without_a_plan_still_lists_every_product(client, admin, member
     data = client.get(V, headers=member).json()["data"]
     assert "Settings" in data["plan"]["error"]
     assert [r["name"] for r in data["rows"]][:3] == ["Ornament", "Shirt", "Blanket"] and data["rows"][-1]["name"] == "Other products"
+
+
+def test_other_products_count_at_their_own_pl2_per_item(client, admin, member, upstream, business_plan):
+    def other_and_total() -> tuple[dict, dict]:
+        data = client.get(V, headers=member).json()["data"]
+        return {r["name"]: r for r in data["rows"]}["Other products"], data
+
+    other, data = other_and_total()  # KHKD has no line for them: Settings › Plan, $7 per item unless changed
+    assert other["pl2_per_item"] == 7 and other["pl2_est"] == other["total_quantity"] * 7
+    assert data["total"]["pl2_est"] == round(sum(r["pl2_est"] or 0 for r in data["rows"]), 2)
+    assert client.put("/api/v1/settings", json={"other_pl2_per_item": 5.5}, headers=admin).json()["data"]["other_pl2_per_item"] == 5.5
+    assert other_and_total()[0]["pl2_est"] == other["total_quantity"] * 5.5
+    client.put("/api/v1/settings", json={"other_pl2_per_item": 0}, headers=admin)  # 0 = none
+    assert other_and_total()[0]["pl2_est"] is None
