@@ -110,7 +110,8 @@ def sheets(client, db_factory, admin):
 def test_pl2_per_account_kt_and_cf(client, member, upstream, sheets):
     ASKED.clear()
     data = client.get(A, headers=member).json()["data"]
-    assert [a[0] for a in ASKED] == ["Cutout Ornament", "Blanket", "Shirt"]  # one store view per priced product, on its sub types
+    # one store view per priced product, on its sub types; sent in parallel, so the order they arrive in varies
+    assert sorted(a[0] for a in ASKED) == ["Blanket", "Cutout Ornament", "Shirt"]
     rows = {a["shop"]: a for a in data["accounts"]}
     assert list(rows) == ["PunGanterdesign", "Daisyfloralsshop", "OnebyHenry"]  # the KH accounts, in sheet order
     pun = rows["PunGanterdesign"]
