@@ -27,17 +27,17 @@ const rowClass = ({ row }: { row: Row }) => (row.children ? 'row-parent' : 'row-
 function footer(): string[] {
   const t = props.report?.total
   if (!t) return []
-  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   return ['All accounts', '', num(t.total_order), num(t.total_quantity), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value)]
 }
 
 function exportCsv() {
-  const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan',
+  const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan',
     'Month plan',
     'Revenue', 'Avg order value']
   const body = rows.value.flatMap((a) => [a, ...(a.children ?? [])].map((r) => [
     a.label, a.team ?? '', r === a ? '' : r.label, a.in_plan ? 'yes' : 'no', r.total_order, r.total_quantity,
-    perDayValue(r.total_quantity, days.value), r.plan ?? '',
+    perDayValue(r.total_quantity, days.value), perDayValue(r.plan, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.avg_order_value,
   ]))
   downloadCsv(`${props.family.key}-accounts-${props.dateFrom}_${props.dateTo}.csv`, header, body)
@@ -79,6 +79,9 @@ function exportCsv() {
         <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
+        <el-table-column label="KH avg/day" prop="plan" width="95" align="right">
+          <template #default="{ row }"><span class="num text-muted" title="Plan to date ÷ the days">{{ row.plan == null ? '' : perDay(row.plan, days) }}</span></template>
+        </el-table-column>
         <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>
           <template #default="{ row }"><span class="num">{{ row.plan == null ? '' : pcs(row.plan) }}</span></template>
         </el-table-column>
