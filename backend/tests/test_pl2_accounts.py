@@ -115,6 +115,9 @@ def test_pl2_per_account_kt_and_cf(client, member, upstream, sheets):
     rows = {a["shop"]: a for a in data["accounts"]}
     assert list(rows) == ["PunGanterdesign", "Daisyfloralsshop", "OnebyHenry"]  # the KH accounts, in sheet order
     pun = rows["PunGanterdesign"]
+    # KH plan to date (01–19/10 of October's 525, 275 and 940 pieces in KH Ornament), for the KH avg/day
+    assert pun["plan"] == round(525 * 19 / 31, 1) and rows["OnebyHenry"]["plan"] == round(940 * 19 / 31, 1)
+    assert data["total"]["plan"] == round(sum(r["plan"] for r in rows.values()), 1) and data["others"]["plan"] is None
     # 10 pieces of each priced product (Ornament $6, Blanket $8, Shirt $5.5), one sub product type each
     assert pun["quantity"] == 30 and pun["kt"] == 10 * (6 + 8 + 5.5) and pun["cf"] == 8047.98
     assert pun["cf_minus_kt"] == round(8047.98 - pun["kt"], 2)  # CF − KT
