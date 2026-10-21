@@ -117,6 +117,7 @@ const planKpis = computed(() => {
     { label: 'Gap', value: signedPcs(gap) || '—', color: gapColor(gap),
       hint: `Actual − Plan to date${gap == null || Math.round(gap) === 0 ? '' : gap < 0 ? ': behind plan' : ': ahead of plan'}` },
     { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) },
+    { label: 'KH avg/day', value: perDay(t?.plan, days.value), hint: `Plan to date ÷ ${days.value} days; actual ${perDay(t?.total_quantity, days.value)}` },
     { label: 'Month plan', value: pcs(t?.plan_month), hint: left == null ? '' : `${pcs(left)} pcs still to sell` },
   ]
 })
@@ -128,7 +129,7 @@ function rowClass({ row }: { row: Row }) {
 function footer(): string[] {
   const t = total.value
   if (!t) return []
-  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   return [`All ${fam.plural}`, num(t.total_order), quantity(t), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
@@ -136,10 +137,11 @@ const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
   num(r.total_quantity) + (r.fix_quantity ? ` (+${num(r.fix_quantity)})` : '')
 
 function exportCsv() {
-  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan',
+  const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan',
     'Month plan', 'Revenue', 'Avg order value', 'Share']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
-    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', perDayValue(r.total_quantity, days.value), r.plan ?? '',
+    g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', perDayValue(r.total_quantity, days.value),
+    perDayValue(r.plan, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap),
     r.achieved ?? '', r.plan_month ?? '',
     r.total_revenue, r.avg_order_value, r.share ?? '',
@@ -175,7 +177,7 @@ function exportCsv() {
       <RouterLink v-if="auth.isAdmin.value && plan?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
     </el-alert>
     <template v-else>
-      <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div v-for="k in planKpis" :key="k.label" class="kpi">
           <div class="kpi__label">{{ k.label }}</div>
           <div class="kpi__value" :style="k.color ? { color: k.color } : undefined">{{ k.value }}</div>
@@ -221,6 +223,9 @@ function exportCsv() {
         <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
+        <el-table-column label="KH avg/day" prop="plan" width="95" align="right">
+          <template #default="{ row }"><span class="num text-muted" title="Plan to date ÷ the days">{{ row.plan == null ? '' : perDay(row.plan, days) }}</span></template>
+        </el-table-column>
         <el-table-column label="Plan to date" prop="plan" width="115" align="right" sortable>
           <template #default="{ row }"><span class="num">{{ row.plan == null ? '' : pcs(row.plan) }}</span></template>
         </el-table-column>
