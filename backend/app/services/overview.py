@@ -138,7 +138,7 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     """{rows: [{name, page, sub_types, …metrics, share, plan, plan_month, achieved, pl2_per_item, pl2_plan, pl2_est}], total,
     plan, query}. Rows follow the plan's products, then Other products; plan fields are absent when the plan does not compare
     (no plan, or filters below ZenE); pl2_per_item / pl2_est are absent only when there is no plan sheet to read."""
-    q = report.build_query(db, {**params, "view": "date"})
+    q = report.build_query(db, {**params, "view": "date"}, user)
     plan_info = _plan(db, q)
     names = plan_info.pop("names", [])
     names += [n for n in _default_names() if n.lower() not in {x.lower() for x in names}]  # a page the plan does not list

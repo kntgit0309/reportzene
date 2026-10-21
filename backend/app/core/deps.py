@@ -48,6 +48,13 @@ def current_user(token: str | None = Depends(session_token), db: Session = Depen
     return user_from_token(db, token)
 
 
+def full_access(user: User = Depends(current_user)) -> User:
+    """Pages that hold the whole of ZenE's data (Etsy › Plan, Lark › Team sheets): not for a member limited to their own sales."""
+    if user.seller_scope is not None:
+        raise forbidden("Your account sees only your own sales: this page holds the whole of ZenE's data")
+    return user
+
+
 def admin(user: User = Depends(current_user)) -> User:
     if not user.is_admin:
         raise forbidden("Only admins can do this")

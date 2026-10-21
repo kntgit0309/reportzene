@@ -138,3 +138,5 @@ def test_pl2_per_account_follows_the_team_filter_and_leaves_cf_out_for_sellers(c
     assert [a["shop"] for a in one["accounts"]] == ["PunGanterdesign"]
     seller = client.get(f"{A}&sellers=7", headers=member).json()["data"]
     assert "seller" in seller["cf"]["error"] and seller["accounts"][0]["cf"] is None and seller["accounts"][0]["kt"] is not None
+    # a seller cuts across stores: only the KH accounts with their sales, without the store plan (Daisyfloralsshop sold nothing)
+    assert [a["shop"] for a in seller["accounts"]] == ["PunGanterdesign", "OnebyHenry"] and seller["accounts"][0]["plan"] is None

@@ -87,7 +87,7 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
     query}. Stores of the plan come first in sheet order, then stores with sales of the family but no plan line. Children
     are sub product types, without a plan, when the family is a single product type."""
     family = family_report.resolve(db, family, user)
-    q = report.build_query(db, {**params, "view": "date"})
+    q = report.build_query(db, {**params, "view": "date"}, user)
     data = report._call(db, user, report._key(f"{family.key}_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, family, q))
     replacements = settings_store.runtime(db).account_replacements
     to = {_key(old): new.strip() for old, new in replacements}

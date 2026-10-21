@@ -103,7 +103,7 @@ def family_report(db: Session, family: Family, params: dict[str, Any], user: Use
     product type also gives its sub product types their `daily` rows (the page's chart then stacks them); the rest group's
     children are trackingis product types."""
     family = resolve(db, family, user)
-    q = report.build_query(db, {**params, "view": "date"})
+    q = report.build_query(db, {**params, "view": "date"}, user)
     data = report._call(db, user, report._key(family.key, q), report.CACHE_TTL_S, lambda c: _fetch(c, family, q))
     fixes = {s: {d: n for d, n in by_day.items() if q.date_from <= d <= q.date_to} for s, by_day in family.quantity_fixes.items()}
     fixes = {s: by_day for s, by_day in fixes.items() if by_day} if _fixes_apply(db, q) else {}

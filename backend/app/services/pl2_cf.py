@@ -109,7 +109,7 @@ def pl2_report(db: Session, params: dict[str, Any], user: User | None = None) ->
     """{months: [{month, days, month_days, plan, plan_to_date, actual, gap, achieved, kt, kt_minus_cf, teams}], total, cf,
     query}. kt = PL2 theo KT for the report's days of the month; plan / actual = PL2 theo CF of the month, gap = actual −
     plan_to_date and achieved = actual / plan_to_date (teams: the per-team lines when the whole of ZenE is selected)."""
-    q = report.build_query(db, {**params, "view": "date"})
+    q = report.build_query(db, {**params, "view": "date"}, user)
     scope = _scope(db, q, user)
     cf_info = {"error": scope["error"]} if "error" in scope else {
         "sheet": family_plan.sheet_info(scope["source"]), "scope": scope["label"], "months": scope["parsed"]["months"]}

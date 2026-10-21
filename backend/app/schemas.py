@@ -14,6 +14,7 @@ class UserCreate(BaseModel):
     code: str = Field(min_length=2, max_length=16)
     role: Role = "member"
     password: str | None = Field(default=None, min_length=8, max_length=200)  # empty = signs in with POD only
+    scope_sellers: list[str] | None = Field(default=None, max_length=50)  # trackingis seller ids it sees only; none = all
 
 
 class UserUpdate(BaseModel):
@@ -22,6 +23,7 @@ class UserUpdate(BaseModel):
     role: Role | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=8, max_length=200)
+    scope_sellers: list[str] | None = Field(default=None, max_length=50)  # null keeps, [] = the whole of ZenE
 
 
 class LoginIn(BaseModel):

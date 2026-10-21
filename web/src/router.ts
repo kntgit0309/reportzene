@@ -4,7 +4,7 @@ import { FAMILY_LIST } from './lib/families'
 import AppLayout from './layouts/AppLayout.vue'
 
 declare module 'vue-router' {
-  interface RouteMeta { title?: string; group?: string; adminOnly?: boolean; public?: boolean }
+  interface RouteMeta { title?: string; group?: string; adminOnly?: boolean; public?: boolean; wholeZene?: boolean }
 }
 
 const HOME = '/etsy/report'
@@ -23,8 +23,8 @@ export const router = createRouter({
         ...FAMILY_LIST.map((f) => ({
           path: `etsy/${f.key}`, component: FamilyView, props: { family: f.key }, meta: { title: `${f.name} report`, group: 'Etsy' },
         })),
-        { path: 'etsy/plan', component: () => import('./views/PlanView.vue'), meta: { title: 'Plan by product', group: 'Etsy' } },
-        { path: 'sheets', component: () => import('./views/SheetsView.vue'), meta: { title: 'Team sheets', group: 'Lark' } },
+        { path: 'etsy/plan', component: () => import('./views/PlanView.vue'), meta: { title: 'Plan by product', group: 'Etsy', wholeZene: true } },
+        { path: 'sheets', component: () => import('./views/SheetsView.vue'), meta: { title: 'Team sheets', group: 'Lark', wholeZene: true } },
         { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings', group: 'System', adminOnly: true } },
       ],
     },
@@ -37,6 +37,7 @@ router.beforeEach(async (to) => {
   if (to.meta.public) return user && to.path === '/login' ? HOME : true
   if (!user) return { path: '/login', query: { next: to.fullPath } }
   if (to.meta.adminOnly && user.role !== 'admin') return HOME
+  if (to.meta.wholeZene && auth.ownSalesOnly.value) return HOME // the whole of ZenE's plan and sheets: not for their own sales only
   return true
 })
 

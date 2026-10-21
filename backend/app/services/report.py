@@ -75,8 +75,10 @@ def _list(value: str | list[str] | None, field: str) -> list[str]:
     return out[:200]
 
 
-def build_query(db: Session, params: dict[str, Any]) -> ReportQuery:
-    """Validate raw filters (REST query string or MCP arguments). Missing dates = this month so far; missing teams = Settings."""
+def build_query(db: Session, params: dict[str, Any], user: User | None) -> ReportQuery:
+    """Validate raw filters (REST query string or MCP arguments). Missing dates = this month so far; missing teams = Settings.
+    A member limited to some sellers (Settings › Users) always gets those sellers, whatever the filters ask: `user` is
+    required so that no report forgets it (None only for internal and test calls)."""
     today = local_today()
     date_from = _date(params.get("date_from"), "date_from", today.replace(day=1))
     date_to = _date(params.get("date_to"), "date_to", today)
@@ -96,6 +98,9 @@ def build_query(db: Session, params: dict[str, Any]) -> ReportQuery:
     lists = {f: _list(params.get(f), f) for f in LIST_FILTERS}
     if params.get("teams") is None:
         lists["teams"] = settings_store.runtime(db).default_teams
+    allowed = user.seller_scope if user is not None else None
+    if allowed is not None:  # their own sales only: the sellers asked for that they may see, else all of theirs
+        lists["sellers"] = [s for s in lists["sellers"] if s in allowed] or list(allowed)
     texts = {f: str(params.get(f) or "").strip()[:200] for f in TEXT_FILTERS}
     if texts["symbol"] and texts["symbol"] not in SYMBOLS:
         raise validation("Unknown comparison", {"symbol": [f"One of {' '.join(SYMBOLS)}"]})
@@ -151,13 +156,13 @@ def _key(kind: str, q: ReportQuery) -> tuple[Any, ...]:
 
 
 def etsy_report(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    q = build_query(db, params)
+    q = build_query(db, params, user)
     data = _call(db, user, _key("report", q), CACHE_TTL_S, lambda c: c.report(q))
     return {**data, "query": {"date_from": q.date_from, "date_to": q.date_to, "view": q.view, "teams": q.lists["teams"]}}
 
 
 def etsy_totals(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    q = build_query(db, {**params, "view": "date"})
+    q = build_query(db, {**params, "view": "date"}, user)
     data = _call(db, user, _key("totals", q), CACHE_TTL_S, lambda c: c.totals(q))
     return {**data, "date_from": q.date_from, "date_to": q.date_to}
 
@@ -177,4 +182,5 @@ def filter_options(db: Session, kind: str, user: User | None = None) -> list[dic
         if kind == "teams":
             item |= {"parent_id": r.get("parent_id"), "type": r.get("type")}
         out.append(item)
-    return out
+    allowed = user.seller_scope if user is not None and kind == "sellers" else None
+    return [o for o in out if str(o["id"]) in allowed] if allowed is not None else out
