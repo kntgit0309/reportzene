@@ -6,7 +6,8 @@ import PageHeader from '../components/PageHeader.vue'
 import PlanChart from '../components/plan/PlanChart.vue'
 import { api } from '../lib/api'
 import { auth } from '../lib/auth'
-import { dateTime, money, moneyRound, num, num1, pct } from '../lib/format'
+import { dateTime, money, moneyRound, num, pct } from '../lib/format'
+import { pcs } from '../lib/plan'
 import type { Plan } from '../lib/types'
 
 const plan = ref<Plan | null>(null)
@@ -65,7 +66,7 @@ function footer(): string[] {
   const t = plan.value?.total
   if (!t) return []
   return ['Total', '', num(t.total_sales), moneyRound(t.total_pl2), pct(t.share),
-    ...t.sales.map(num), ...t.sales_per_day.map(num1), ...t.pl2.map(moneyRound)]
+    ...t.sales.map(num), ...t.sales_per_day.map((v) => pcs(v)), ...t.pl2.map(moneyRound)]
 }
 </script>
 
@@ -121,7 +122,7 @@ function footer(): string[] {
         </el-table-column>
         <el-table-column label="Sales / day" align="center">
           <el-table-column v-for="(m, i) in plan.months" :key="`day-${m}`" :label="m" width="95" align="right">
-            <template #default="{ row }"><span class="num">{{ num1(row.sales_per_day[i]) }}</span></template>
+            <template #default="{ row }"><span class="num">{{ pcs(row.sales_per_day[i]) }}</span></template>
           </el-table-column>
         </el-table-column>
         <el-table-column label="PL2 / month" align="center">

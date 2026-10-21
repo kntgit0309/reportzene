@@ -1,6 +1,6 @@
 // Plan vs actual (Etsy › Ornament, Etsy › Shirt): pieces, gap, % of plan bars — shared by the product type and account tables.
 import { h, type VNode } from 'vue'
-import { num, num1 } from './format'
+import { num } from './format'
 
 /** Calendar days of a date range, both ends included: 2026-10-01 → 2026-10-19 is 19 days. */
 export function rangeDays(from: string, to: string): number {
@@ -8,10 +8,10 @@ export function rangeDays(from: string, to: string): number {
   return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86_400_000) + 1) : 1
 }
 
-/** Avg sales/day: pieces sold per day of the range, one decimal ("99.8"). */
-export const perDay = (pcs: number | null | undefined, days: number) => (pcs == null ? '—' : num1(pcs / days))
+/** Avg sales/day (and KH avg/day): pieces per day of the range, rounded to whole pieces ("100"). */
+export const perDay = (pcs: number | null | undefined, days: number) => (pcs == null ? '—' : num(Math.round(pcs / days)))
 /** The same, unformatted (CSV). */
-export const perDayValue = (pcs: number | null | undefined, days: number) => (pcs == null ? '' : Math.round((pcs / days) * 10) / 10)
+export const perDayValue = (pcs: number | null | undefined, days: number) => (pcs == null ? '' : Math.round(pcs / days))
 
 /** Pieces, rounded: 1326.9 → "1,327". */
 export const pcs = (v: number | null | undefined) => (v == null ? '—' : num(Math.round(v)))
