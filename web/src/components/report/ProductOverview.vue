@@ -68,17 +68,17 @@ const planKpis = computed(() => {
 function footer(): string[] {
   const t = total.value
   if (!t) return []
-  const planCells = hasPlan.value ? [pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
+  const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
   const pl2Cells = [...(hasKt.value ? [''] : []), ...(hasPlan.value ? [money(t.pl2_plan)] : []), ...(hasKt.value ? [money(t.pl2_est)] : [])]
   const quantity = num(t.total_quantity) + (t.fix_quantity ? ` (+${num(t.fix_quantity)})` : '')
   return ['All products', num(t.total_order), quantity, perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), pct(1), ...pl2Cells]
 }
 
 function exportCsv() {
-  const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Avg sales/day', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
+  const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
     'Share', 'PL2/item', 'PL2 plan to date', 'PL2 KT (est.)']
   const body = rows.value.map((r) => [r.name, r.sub_types.join(' | '), r.total_order, r.total_quantity, perDayValue(r.total_quantity, days.value),
-    r.plan ?? '',
+    perDayValue(r.plan, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.share ?? '', r.pl2_per_item ?? '',
     r.pl2_plan ?? '', r.pl2_est ?? ''])
   downloadCsv(`products-vs-plan-${props.params.date_from}_${props.params.date_to}.csv`, header, body)
@@ -138,6 +138,9 @@ function exportCsv() {
         <template #default="{ row }"><span class="num">{{ perDay(row.total_quantity, days) }}</span></template>
       </el-table-column>
       <template v-if="hasPlan">
+        <el-table-column label="KH avg/day" prop="plan" width="85" align="right">
+          <template #default="{ row }"><span class="num text-muted" title="Plan to date ÷ the days">{{ row.plan == null ? '' : perDay(row.plan, days) }}</span></template>
+        </el-table-column>
         <el-table-column label="Plan to date" prop="plan" width="105" align="right" sortable>
           <template #default="{ row }"><span class="num">{{ row.plan == null ? '' : pcs(row.plan) }}</span></template>
         </el-table-column>
@@ -180,7 +183,7 @@ function exportCsv() {
       trackingis sub product type no product covers (no line in the plan: its PL2/item is set in Settings › Plan, $7). An order with several products counts in each row, so the rows can add up to a
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
       includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
-      <template v-if="hasPlan">The plan is for ZenE as a whole.</template>
+      <template v-if="hasPlan">The plan is for ZenE as a whole; KH avg/day = plan to date ÷ the days.</template>
       <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above; the share chart
         shows each product's part of All products' PL2 KT.</template>
     </div>

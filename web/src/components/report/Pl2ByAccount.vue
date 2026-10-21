@@ -39,6 +39,7 @@ const days = computed(() => rangeDays(props.params.date_from, props.params.date_
 const cf = computed(() => data.value?.cf)
 const hasCf = computed(() => !!cf.value && !cf.value.error)
 const hasKt = computed(() => !!data.value && !data.value.kt.error)
+const hasKhPlan = computed(() => (data.value?.accounts ?? []).some((a) => a.plan != null)) // KH avg/day
 const rows = computed<Row[]>(() => {
   const d = data.value
   if (!d) return []
@@ -91,15 +92,17 @@ const rowClass = ({ row }: { row: Row }) => (row.children ? 'row-parent' : row.k
 function footer(): (string | VNode)[] {
   const t = total.value
   if (!t) return []
-  return ['All accounts', '', num(t.quantity), perDay(t.quantity, days.value), ...(hasKt.value ? [money(t.kt)] : []),
+  return ['All accounts', '', num(t.quantity), perDay(t.quantity, days.value), ...(hasKhPlan.value ? [perDay(t.plan, days.value)] : []),
+    ...(hasKt.value ? [money(t.kt)] : []),
     ...(hasCf.value ? [cfTotal(t.cf, money(t.cf))] : []), ...(hasKt.value && hasCf.value ? [signedMoney(t.cf_minus_kt)] : [])]
 }
 
 function exportCsv() {
   const d = data.value
   if (!d) return
-  const header = ['Account', 'Team', 'In KH', 'Quantity', 'Avg sales/day', 'PL2 KT (est.)', 'PL2 CF (actual)', 'CF − KT']
-  const line = (r: Pl2AccountLine, inKh: string) => [r.shop, r.team ?? '', inKh, r.quantity, perDayValue(r.quantity, days.value), r.kt ?? '',
+  const header = ['Account', 'Team', 'In KH', 'Quantity', 'Avg sales/day', 'KH avg/day', 'PL2 KT (est.)', 'PL2 CF (actual)', 'CF − KT']
+  const line = (r: Pl2AccountLine, inKh: string) => [r.shop, r.team ?? '', inKh, r.quantity, perDayValue(r.quantity, days.value),
+    perDayValue(r.plan, days.value), r.kt ?? '',
     r.cf ?? '', r.cf_minus_kt ?? '']
   const body = [...d.accounts.map((a) => line(a, 'yes')), ...d.others.children.map((c) => line(c, 'no'))]
   downloadCsv(`pl2-by-account-${props.params.date_from}_${props.params.date_to}.csv`, header, body)
@@ -158,6 +161,9 @@ function exportCsv() {
       <el-table-column label="Avg sales/day" prop="quantity" width="95" align="right">
         <template #default="{ row }"><span class="num">{{ perDay(row.quantity, days) }}</span></template>
       </el-table-column>
+      <el-table-column v-if="hasKhPlan" label="KH avg/day" prop="plan" width="85" align="right">
+        <template #default="{ row }"><span class="num text-muted" title="KH plan to date ÷ the days">{{ row.plan == null ? '' : perDay(row.plan, days) }}</span></template>
+      </el-table-column>
       <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="kt" min-width="120" align="right" sortable>
         <template #default="{ row }"><span class="num font-semibold">{{ row.kt == null ? '' : money(row.kt) }}</span></template>
       </el-table-column>
@@ -175,7 +181,8 @@ function exportCsv() {
       One row per account of the KH plan sheets (Ornament, Shirt, Blanket…), in their order; a suspended store counts as the one that
       takes over (Settings › Plan). Other accounts adds up the stores outside the plans that have a PL2 (KT or CF not 0); All accounts
       is the plans' accounts plus them. PL2 KT = the account's quantity of each plan product × that product's PL2/item, for the
-      report's days (pieces added by hand, Felt, are not tied to an account). PL2 CF = finance's PROFIT THỰC ĐẠT of the account
+      report's days (pieces added by hand, Felt, are not tied to an account). KH avg/day = the account's plan to date in
+      the KH sheets that plan per store (Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel) ÷ the days. PL2 CF = finance's PROFIT THỰC ĐẠT of the account
       ("PL Account Etsy_Monthly"), booked per month: the range counts the whole months it touches. CF − KT = PL2 CF − PL2 KT.
       The share charts show each account's part of All accounts' PL2 (accounts at 0 left out); a negative CF is a negative
       share, so the other shares can add up to more than 100%.

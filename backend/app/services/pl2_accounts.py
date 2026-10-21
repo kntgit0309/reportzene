@@ -123,10 +123,11 @@ def _cf(db: Session, q: ReportQuery) -> dict[str, Any]:
                                                       "months": parsed["months"], "warnings": parsed["warnings"]}}
 
 
-def _kh_accounts(db: Session) -> list[dict[str, str]]:
-    """The stores of the KH sheets (Settings › Plan, product pages), in sheet order, suspended ones replaced."""
+def _kh_accounts(db: Session, date_from: str, date_to: str) -> list[dict[str, Any]]:
+    """The stores of the KH sheets (Settings › Plan, product pages), in sheet order, suspended ones replaced, each with its
+    plan for the range (pieces, months pro rata of the days) added up over the sheets; None when no sheet plans those months."""
     rt = settings_store.runtime(db)
-    seen: dict[str, dict[str, str]] = {}
+    seen: dict[str, dict[str, Any]] = {}
     for key, sheet_id in rt.family_plan_sheets.items():
         source, family = db.get(SheetSource, sheet_id), FAMILIES.get(key)
         if source is None or family is None or not source.rows:
@@ -136,8 +137,11 @@ def _kh_accounts(db: Session) -> list[dict[str, str]]:
         except AppError:
             continue
         if parsed["per_store"]:
-            for s in parsed["shops"]:
-                seen.setdefault(_key(s["shop"]), {"name": s["shop"], "team": s["team"]})
+            planned = family_plan.shop_plans(parsed, date_from, date_to)
+            for s in planned["shops"]:
+                a = seen.setdefault(_key(s["shop"]), {"name": s["shop"], "team": s["team"], "plan": None})
+                if planned["months"]:  # the sheet plans some month of the range
+                    a["plan"] = (a["plan"] or 0.0) + sum(g["plan"] for g in s["groups"].values())
     return list(seen.values())
 
 
@@ -152,13 +156,15 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
             raise
 
 
-def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: float | None) -> dict[str, Any]:
-    return {"shop": name, "team": team, "quantity": quantity, "kt": None if kt is None else round(kt, 2),
+def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: float | None, plan: float | None = None) -> dict[str, Any]:
+    return {"shop": name, "team": team, "quantity": quantity, "plan": None if plan is None else round(plan, 1),
+            "kt": None if kt is None else round(kt, 2),
             "cf": None if cf is None else round(cf, 2), "cf_minus_kt": round(cf - kt, 2) if kt is not None and cf is not None else None}
 
 
 def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    """{accounts: [{shop, team, quantity, kt, cf, cf_minus_kt}], others: {…, count, children}, total, kt, cf, query}."""
+    """{accounts: [{shop, team, quantity, plan, kt, cf, cf_minus_kt}], others: {…, count, children}, total, kt, cf, query};
+    plan = the account's KH plan to date (pieces), for its KH avg/day."""
     q = report.build_query(db, {**params, "view": "date"})
     rt = settings_store.runtime(db)
     to = {_key(old): new.strip() for old, new in rt.account_replacements}
@@ -196,14 +202,14 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         return (team_names is None or _key(team) in team_names) and (shop_names is None or _key(name) in shop_names)
 
     has_kt, has_cf = "error" not in kt_info, "error" not in cf
-    kh = _kh_accounts(db)
+    kh = _kh_accounts(db, q.date_from, q.date_to)
     accounts = []
     for a in kh:
         if not kept(a["name"], a["team"]):
             continue
         s, b = stores.get(_key(a["name"]), {}), booked.get(_key(a["name"]), {})
         accounts.append(_line(a["name"], a["team"], s.get("quantity", 0), s.get("kt", 0.0) if has_kt else None,
-                              b.get("cf", 0.0) if has_cf else None))
+                              b.get("cf", 0.0) if has_cf else None, a["plan"]))
     planned = {_key(a["name"]) for a in kh}  # every account of the plans, whether the filters keep it or not
     children = []
     for key in sorted(set(stores) | set(booked)):
@@ -225,6 +231,8 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
     others = {**_line(OTHERS, None, sum(c["quantity"] for c in children), add(children, "kt", has_kt), add(children, "cf", has_cf)),
               "count": len(children), "children": children}
     everything = [*accounts, others]
-    total = _line("All accounts", None, sum(r["quantity"] for r in everything), add(everything, "kt", has_kt), add(everything, "cf", has_cf))
+    plans = [a["plan"] for a in accounts if a["plan"] is not None]
+    total = _line("All accounts", None, sum(r["quantity"] for r in everything), add(everything, "kt", has_kt), add(everything, "cf", has_cf),
+                  sum(plans) if plans else None)
     return {"accounts": accounts, "others": others, "total": total, "kt": kt_info, "cf": cf.get("info") or {"error": cf.get("error")},
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
