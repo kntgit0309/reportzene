@@ -2,9 +2,10 @@
 import { computed, onMounted, ref, watch, type VNode } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import ShareBarChart from './ShareBarChart.vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num } from '../../lib/format'
-import { cfColor, cfTotal, gapColor, perDay, perDayValue, rangeDays } from '../../lib/plan'
+import { cfColor, cfTotal, gapColor, KT_COLOR, perDay, perDayValue, rangeDays } from '../../lib/plan'
 import { downloadCsv, fetchPl2Accounts } from '../../lib/report'
 import type { Pl2AccountLine, Pl2Accounts } from '../../lib/types'
 
@@ -16,6 +17,7 @@ const props = defineProps<{ params: Record<string, string> }>()
 const data = ref<Pl2Accounts | null>(null)
 const loading = ref(false)
 const error = ref('')
+const showChart = ref(true)
 
 async function load() {
   loading.value = true
@@ -46,6 +48,16 @@ const rows = computed<Row[]>(() => {
   return [...d.accounts.map((a) => ({ ...a, key: a.shop })), ...others]
 })
 const total = computed(() => data.value?.total)
+// share charts: each account of the plans and Other accounts as one bar, leaving out those at 0
+function shares(field: 'kt' | 'cf') {
+  const d = data.value
+  if (!d) return []
+  const lines = [...d.accounts, ...(d.others.count ? [{ ...d.others, shop: `Other accounts (${d.others.count})` }] : [])]
+  return lines.filter((l) => Math.round((l[field] ?? 0) * 100)).map((l) => ({ name: l.shop, value: l[field] as number }))
+}
+const ktShares = computed(() => (hasKt.value ? shares('kt') : []))
+const cfShares = computed(() => (hasCf.value ? shares('cf') : []))
+const ktColor = () => KT_COLOR
 // CF is booked per month: the months the range touches count whole
 const cfMonths = computed(() => {
   const [from, to] = [props.params.date_from, props.params.date_to].map((d) => d?.slice(0, 7))
@@ -99,7 +111,10 @@ function exportCsv() {
   <div class="section-card">
     <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
       <h3 class="card-title !mb-0">PL2 by account: KT vs CF</h3>
-      <el-button size="small" type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
+      <div class="flex items-center gap-3">
+        <el-switch v-model="showChart" active-text="Chart" />
+        <el-button size="small" type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
+      </div>
     </div>
     <div v-if="hasCf" class="mb-3 text-xs text-muted">{{ source }}</div>
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!my-3" />
@@ -117,6 +132,13 @@ function exportCsv() {
         <div class="kpi__value" :style="k.color ? { color: k.color } : undefined">{{ k.value }}</div>
         <div v-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
       </div>
+    </div>
+
+    <div v-if="showChart && (ktShares.length || cfShares.length)" class="mb-3 grid gap-3 lg:grid-cols-2">
+      <ShareBarChart v-if="ktShares.length" title="PL2 KT share by account" value-label="PL2 KT (est.)" :items="ktShares"
+                     :total="total?.kt" :color="ktColor" />
+      <ShareBarChart v-if="cfShares.length" title="PL2 CF share by account" value-label="PL2 CF (actual)" :items="cfShares"
+                     :total="total?.cf" :color="cfColor" />
     </div>
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
@@ -155,6 +177,8 @@ function exportCsv() {
       is the plans' accounts plus them. PL2 KT = the account's quantity of each plan product × that product's PL2/item, for the
       report's days (pieces added by hand, Felt, are not tied to an account). PL2 CF = finance's PROFIT THỰC ĐẠT of the account
       ("PL Account Etsy_Monthly"), booked per month: the range counts the whole months it touches. CF − KT = PL2 CF − PL2 KT.
+      The share charts show each account's part of All accounts' PL2 (accounts at 0 left out); a negative CF is a negative
+      share, so the other shares can add up to more than 100%.
     </div>
   </div>
 </template>

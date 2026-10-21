@@ -31,6 +31,8 @@ export function signedPcs(v: number | null | undefined): string {
 export const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
 /** The same as a colour, where a utility class would lose to a component style (KPI values). */
 export const gapColor = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? undefined : v < 0 ? '#dc2626' : '#16a34a')
+/** PL2 estimated from sales (PL2 theo KT) in charts. */
+export const KT_COLOR = '#0d9488'
 /** Finance's PL2 actual (PL2 theo CF): blue to stand out, red when negative (KPI values, table cells and totals). */
 export const CF_COLOR = '#2563eb'
 export const cfColor = (v: number | null | undefined) => (v != null && Math.round(v * 100) < 0 ? '#dc2626' : CF_COLOR)

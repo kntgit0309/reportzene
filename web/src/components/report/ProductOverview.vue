@@ -3,9 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import FamilyPlanChart from './FamilyPlanChart.vue'
+import ShareBarChart from './ShareBarChart.vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num, pct } from '../../lib/format'
-import { bar, barColor, gapClass, gapColor, gapOf, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
+import { bar, barColor, gapClass, gapColor, gapOf, KT_COLOR, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
 import { downloadCsv, fetchOverview } from '../../lib/report'
 import type { Overview, OverviewRow } from '../../lib/types'
 
@@ -40,6 +41,9 @@ const days = computed(() => rangeDays(props.params.date_from, props.params.date_
 const hasKt = computed(() => (data.value?.rows ?? []).some((r) => r.pl2_per_item != null)) // PL2 theo KT, for any filters
 const rows = computed<Row[]>(() => (data.value?.rows ?? []).map((r) => ({ ...r, gap: gapOf(r) })))
 const chartRows = computed(() => rows.value.filter((r) => r.plan || r.total_quantity))
+const ktShares = computed(() => rows.value.filter((r) => r.pl2_est).map((r) => ({ name: r.name, value: r.pl2_est as number }))) // PL2 KT share
+const showPlanChart = computed(() => showChart.value && hasPlan.value && chartRows.value.length > 0)
+const ktColor = () => KT_COLOR
 const total = computed(() => data.value?.total)
 const planSource = computed(() => {
   const p = plan.value
@@ -105,7 +109,11 @@ function exportCsv() {
         <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
       </div>
     </div>
-    <FamilyPlanChart v-if="showChart && hasPlan && chartRows.length" :groups="chartRows" class="mb-3" />
+    <div v-if="showPlanChart || (showChart && ktShares.length)" class="mb-3 grid gap-3 xl:grid-cols-5">
+      <FamilyPlanChart v-if="showPlanChart" :groups="chartRows" class="xl:col-span-3" />
+      <ShareBarChart v-if="ktShares.length" title="PL2 KT share by product" value-label="PL2 KT (est.)" :items="ktShares"
+                     :total="total?.pl2_est" :color="ktColor" :class="showPlanChart ? 'xl:col-span-2' : 'xl:col-span-5'" />
+    </div>
 
     <el-table v-loading="loading" :data="rows" row-key="name" show-summary :summary-method="footer" empty-text="No sales for these filters"
               class="w-full">
@@ -173,7 +181,8 @@ function exportCsv() {
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
       includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
       <template v-if="hasPlan">The plan is for ZenE as a whole.</template>
-      <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above.</template>
+      <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above; the share chart
+        shows each product's part of All products' PL2 KT.</template>
     </div>
   </div>
 </template>
