@@ -51,6 +51,12 @@ def _user(db: Session, ctx: Context) -> User:
         raise AgentError(exc.message) from exc
 
 
+def _whole_zene(user: User) -> None:
+    """Sheets hold the whole of ZenE's data: not for a member limited to their own sales."""
+    if user.seller_scope is not None:
+        raise AgentError("Your account sees only your own sales: the team sheets hold the whole of ZenE's data")
+
+
 def _run(ctx: Context, fn: Callable[[Session, User], Any]) -> Any:
     """Open a session, authenticate, run; turn app errors into readable tool errors."""
     with SessionLocal() as db:
@@ -189,14 +195,15 @@ def filter_options(ctx: Context, kind: str, query: str = "") -> list[dict]:
 
 @mcp.tool(description="The team's Lark report sheets: id, name, tab, columns (header), row count, last sync time and last error.")
 def list_sheets(ctx: Context) -> list[dict]:
-    return _run(ctx, lambda db, u: [sheets.summary(s) for s in sheets.list_all(db)])
+    return _run(ctx, lambda db, u: _whole_zene(u) or [sheets.summary(s) for s in sheets.list_all(db)])
 
 
 @mcp.tool(description=(
     "Rows of one Lark report sheet (by id or exact name) from its last sync. q searches every cell; page/per_page page "
     "through. Each row maps column name → text, plus _row = the row number in the sheet."))
 def read_sheet(ctx: Context, sheet: str, q: str = "", page: int = 1, per_page: int = 50) -> dict:
-    def run(db: Session, _u: User) -> dict:
+    def run(db: Session, u: User) -> dict:
+        _whole_zene(u)
         source = sheets.find(db, sheet)
         size = min(max(per_page, 1), MAX_ROWS)
         items, total = sheets.rows(source, q, max(page, 1), size)
@@ -206,7 +213,7 @@ def read_sheet(ctx: Context, sheet: str, q: str = "", page: int = 1, per_page: i
 
 @mcp.tool(description="Read a Lark report sheet again from Lark now (by id or exact name), then return its summary.")
 def sync_sheet(ctx: Context, sheet: str) -> dict:
-    return _run(ctx, lambda db, u: sheets.summary(sheets.sync(db, sheets.find(db, sheet))))
+    return _run(ctx, lambda db, u: _whole_zene(u) or sheets.summary(sheets.sync(db, sheets.find(db, sheet))))
 
 
 def http_app():

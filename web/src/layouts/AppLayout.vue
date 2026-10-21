@@ -18,12 +18,15 @@ const GROUPS = [
   { title: 'Etsy', items: [
     { path: '/etsy/report', title: 'Report', icon: DataLine },
     ...FAMILY_LIST.map((f) => ({ path: `/etsy/${f.key}`, title: f.name, icon: f.icon })),
-    { path: '/etsy/plan', title: 'Plan', icon: Aim },
+    { path: '/etsy/plan', title: 'Plan', icon: Aim, wholeZene: true },
   ] },
-  { title: 'Lark', items: [{ path: '/sheets', title: 'Team sheets', icon: Document }] },
+  { title: 'Lark', items: [{ path: '/sheets', title: 'Team sheets', icon: Document, wholeZene: true }] },
   { title: 'System', adminOnly: true, items: [{ path: '/settings', title: 'Settings', icon: Setting }] },
 ]
-const groups = computed(() => GROUPS.filter((g) => !g.adminOnly || auth.isAdmin.value))
+// a member limited to their own sales does not get the pages of the whole of ZenE (plan, team sheets)
+const groups = computed(() => GROUPS.filter((g) => !g.adminOnly || auth.isAdmin.value)
+  .map((g) => ({ ...g, items: g.items.filter((m) => !('wholeZene' in m && m.wholeZene && auth.ownSalesOnly.value)) }))
+  .filter((g) => g.items.length))
 const active = computed(() => GROUPS.flatMap((g) => g.items).find((m) => route.path.startsWith(m.path))?.path ?? route.path)
 
 async function logout() {
@@ -62,7 +65,7 @@ async function logout() {
           <div class="flex cursor-pointer items-center gap-2">
             <span class="hidden text-right text-xs leading-tight sm:block">
               <b class="block text-slate-900">{{ user?.name }}</b>
-              <span class="text-slate-500">{{ user?.role === 'admin' ? 'Admin' : 'Member' }} · {{ user?.code }}</span>
+              <span class="text-slate-500">{{ user?.role === 'admin' ? 'Admin' : auth.ownSalesOnly.value ? 'Member · own sales' : 'Member' }} · {{ user?.code }}</span>
             </span>
             <el-avatar :size="34" :src="user?.avatar_url ?? undefined" class="!bg-[#2563eb]">{{ user?.name.slice(0, 1).toUpperCase() }}</el-avatar>
           </div>

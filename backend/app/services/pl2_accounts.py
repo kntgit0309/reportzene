@@ -165,7 +165,7 @@ def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: floa
 def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{accounts: [{shop, team, quantity, plan, kt, cf, cf_minus_kt}], others: {…, count, children}, total, kt, cf, query};
     plan = the account's KH plan to date (pieces), for its KH avg/day."""
-    q = report.build_query(db, {**params, "view": "date"})
+    q = report.build_query(db, {**params, "view": "date"}, user)
     rt = settings_store.runtime(db)
     to = {_key(old): new.strip() for old, new in rt.account_replacements}
 
@@ -202,14 +202,19 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         return (team_names is None or _key(team) in team_names) and (shop_names is None or _key(name) in shop_names)
 
     has_kt, has_cf = "error" not in kt_info, "error" not in cf
+    # seller / designer / keyword filters (and a member limited to their own sales) cut across stores: then only the KH
+    # accounts with such sales are listed, without their store plan
+    narrowed = any(q.lists.get(f) for f in ("sellers", "designers")) or bool(q.texts.get("keyword"))
     kh = _kh_accounts(db, q.date_from, q.date_to)
     accounts = []
     for a in kh:
         if not kept(a["name"], a["team"]):
             continue
         s, b = stores.get(_key(a["name"]), {}), booked.get(_key(a["name"]), {})
+        if narrowed and not s:
+            continue
         accounts.append(_line(a["name"], a["team"], s.get("quantity", 0), s.get("kt", 0.0) if has_kt else None,
-                              b.get("cf", 0.0) if has_cf else None, a["plan"]))
+                              b.get("cf", 0.0) if has_cf else None, None if narrowed else a["plan"]))
     planned = {_key(a["name"]) for a in kh}  # every account of the plans, whether the filters keep it or not
     children = []
     for key in sorted(set(stores) | set(booked)):

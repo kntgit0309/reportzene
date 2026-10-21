@@ -26,6 +26,12 @@ def _code(raw: str) -> str:
     return code
 
 
+def _scope(sellers: list[str] | None) -> list[str] | None:
+    """trackingis seller ids a member is limited to (their own sales); None = the whole of ZenE."""
+    ids = list(dict.fromkeys(str(s).strip() for s in sellers or [] if str(s).strip()))
+    return ids or None
+
+
 def _commit(db: Session) -> None:
     try:
         db.commit()
@@ -41,7 +47,8 @@ def list_users(request: Request, db: Session = Depends(get_db), _: User = Depend
 
 @router.post("")
 def create_user(body: UserCreate, request: Request, db: Session = Depends(get_db), _: User = Depends(admin)) -> dict[str, Any]:
-    user = User(email=body.email.strip().lower(), name=body.name.strip(), code=_code(body.code), role=body.role, password_hash=hash_password(body.password) if body.password else NO_PASSWORD)
+    user = User(email=body.email.strip().lower(), name=body.name.strip(), code=_code(body.code), role=body.role, password_hash=hash_password(body.password) if body.password else NO_PASSWORD,
+                scope_sellers=_scope(body.scope_sellers))
     db.add(user)
     _commit(db)
     return ok(user_out(user), request, "User created")
@@ -59,6 +66,8 @@ def update_user(user_id: int, body: UserUpdate, request: Request, db: Session = 
             setattr(user, field, getattr(body, field))
     if body.code is not None:
         user.code = _code(body.code)
+    if body.scope_sellers is not None:
+        user.scope_sellers = _scope(body.scope_sellers)
     if body.password:
         user.password_hash = hash_password(body.password)
     if body.password or body.is_active is False:

@@ -7,6 +7,8 @@ const state = reactive<{ user: User | null; loaded: boolean }>({ user: null, loa
 export const auth = {
   state,
   isAdmin: computed(() => state.user?.role === 'admin'),
+  /** A member limited to their own sales (Settings › Users): the server filters every report; pages of the whole of ZenE are hidden. */
+  ownSalesOnly: computed(() => state.user?.role !== 'admin' && (state.user?.scope_sellers?.length ?? 0) > 0),
 
   async load(): Promise<User | null> {
     if (state.loaded) return state.user

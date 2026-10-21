@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -26,10 +26,17 @@ class User(Base):
     # trackingis token handed over by the last SSO sign-in, encrypted (settings_store.encrypt); None = use the shared token
     pod_token: Mapped[str | None] = mapped_column(Text)
     pod_token_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Data scope set by an admin: the trackingis seller ids whose sales this member sees; None / [] = the whole of ZenE
+    scope_sellers: Mapped[list[str] | None] = mapped_column(JSON)
 
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def seller_scope(self) -> list[str] | None:
+        """The trackingis seller ids every report of this user is limited to; None = no limit (admins always see everything)."""
+        return None if self.is_admin or not self.scope_sellers else [str(s) for s in self.scope_sellers]
 
 
 NO_PASSWORD = "!"  # never matches verify_password: the user signs in through POD only

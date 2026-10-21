@@ -1,5 +1,6 @@
 export type Role = 'member' | 'admin'
-export type User = { id: number; email: string; name: string; code: string; role: Role; is_active: boolean; avatar_url: string | null; is_pod: boolean }
+export type User = { id: number; email: string; name: string; code: string; role: Role; is_active: boolean; avatar_url: string | null; is_pod: boolean
+  scope_sellers: string[] } // trackingis seller ids a member sees only (their own sales); [] = the whole of ZenE
 
 export type View = 'date' | 'order' | 'product' | 'store' | 'seller' | 'product_type'
 
