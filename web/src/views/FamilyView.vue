@@ -170,8 +170,7 @@ function exportCsv() {
     </div>
   </div>
 
-  <!-- the seller version (own sales only) shows actuals only: the plans are per store / team -->
-  <div v-if="data && !auth.ownSalesOnly.value" class="section-card">
+  <div v-if="data" class="section-card">
     <h3 class="card-title !mb-1">Actual vs plan (pieces)</h3>
     <div v-if="hasPlan" class="mb-3 text-xs text-muted">{{ planSource }}</div>
     <el-alert v-if="!hasPlan" type="info" :closable="false" show-icon :title="plan?.error" class="!mt-2">
