@@ -1,4 +1,7 @@
 """PL2 theo CF of a seller: their "Profit tính KPI" from each team's seller P&L tab, next to their PL2 plan and KT."""
+import pytest
+
+from app.core.errors import AppError
 from app.models import SheetSource
 from app.services.seller_cf import parse
 from tests.test_overview import business_plan, upstream  # noqa: F401  (fixtures)
@@ -29,6 +32,12 @@ def test_sellers_profit_per_month_is_read_from_the_kpi_section():
     assert set(sellers) == {"anh", "linh", "an"} and sellers["linh"]["name"] == "Linh PT"
     assert sellers["linh"]["actual"]["10-2026"] == 2571.47 and len(sellers["linh"]["actual"]) == 12  # not the Jan-26 block
     assert sellers["anh"]["actual"]["01-2026"] == 318.7  # not the share rows below
+
+    # finance's summary tab ("PL Seller Etsy_Monthly": team, seller, then the label) cannot be read: say which tabs to pick
+    summary = [_row("Etsy 1", "Mai VTT", "x")]
+    summary[0]["Column 1"], summary[0]["Column 2"], summary[0]["01-2026"] = "Etsy 1", "Mai VTT", "Profit tính KPI"
+    with pytest.raises(AppError, match="1.2 P&L Seller"):
+        parse(HEADER, summary)
 
 
 def test_pl2_kt_vs_cf_for_a_seller(client, db_factory, admin, member, upstream, business_plan, seller_sheet):  # noqa: F811

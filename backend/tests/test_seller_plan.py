@@ -6,7 +6,7 @@ from app.services import report
 from app.services.families import ORNAMENT
 from app.services.family_plan import parse as parse_kh
 from app.services.family_plan import plan_for
-from app.services.seller_plan import match, name_key, parse
+from app.services.seller_plan import best, match, name_key, parse
 from tests.test_ornament_plan import HEADER as KH_HEADER
 from tests.test_ornament_plan import OCT_FELT
 from tests.test_ornament_plan import ROWS as KH_ROWS
@@ -33,27 +33,44 @@ OCT_LINH = 0.494  # the sheet's own share (its % columns)
 
 
 def test_seller_rows_and_months_are_read_from_the_dollar_columns():
-    plan = parse(HEADER, ROWS)
+    [plan] = parse(HEADER, ROWS)
     assert plan["months"] == [10, 11, 12] and set(plan["sellers"]) == {"huyen", "van", "linh"}  # Mai has no figures
     assert plan["sellers"]["linh"]["pl2"] == {10: 8938, 11: 25150, 12: 23357} and plan["total"][10] == 9149 + 8938
     assert plan["sellers"]["linh"]["share"] == {10: 0.494, 11: 0.406, 12: 0.486}  # the % block: "49.4%" → 0.494
     # the label row can also sit under the sheet's header row
     labels = [f"Column {i}" for i in range(1, 10)]
     shifted = [dict(zip(labels, [r.get(h, "") for h in HEADER], strict=True)) for r in [dict(zip(HEADER, HEADER, strict=True)), *ROWS]]
-    assert parse(labels, shifted)["sellers"]["huyen"]["pl2"][11] == 25598
+    assert parse(labels, shifted)[0]["sellers"]["huyen"]["pl2"][11] == 25598
     assert name_key("Linh PT.ETS") == name_key("linh") == "linh" and name_key("Thuỷ NT") == "thuy"
     # a stray label further left (a team, a note on the total row) does not take the names' place
     # (here a table on the left runs on past the sellers' last row)
     wide = ["Team", *HEADER]
     rows = [dict(zip(wide, [f"note {i}", *[r[h] for h in HEADER]], strict=True)) for i, r in enumerate(ROWS)]
-    assert set(parse(wide, rows)["sellers"]) == {"huyen", "van", "linh"}
+    assert set(parse(wide, rows)[0]["sellers"]) == {"huyen", "van", "linh"}
     # without the % columns, a share is the seller's dollars / the sellers' total
-    dollars = parse(HEADER[:5], [{h: r[h] for h in HEADER[:5]} for r in ROWS])
+    [dollars] = parse(HEADER[:5], [{h: r[h] for h in HEADER[:5]} for r in ROWS])
     assert dollars["sellers"]["linh"]["share"] == {} and dollars["total"][10] == 9149 + 8938
 
 
+
+def test_a_table_per_account_beside_the_sellers_is_told_apart_by_the_names():
+    # "KH PL2_Seller": a table per account on the left, with the same PL2 labels, then the sellers' table
+    accounts = [["Account", "PL2 T10", "PL2 T11", "PL2 T12", ""], ["TỔNG", "64,798", "209,331", "170,917", ""],
+                ["SpringCityShopArt", "5,000", "9,000", "8,000", ""], ["PunGanterdesign", "12,000", "20,000", "18,000", ""]]
+    sellers = [[h for h in HEADER], *([r[h] for h in HEADER] for r in ROWS)]
+    width = 5 + len(HEADER)
+    labels = [f"Column {i}" for i in range(1, width + 1)]
+    grid = [(accounts[i] if i < len(accounts) else [""] * 5) + (sellers[i] if i < len(sellers) else [""] * len(HEADER))
+            for i in range(max(len(accounts), len(sellers)))]
+    tables = parse(labels, [dict(zip(labels, row, strict=True)) for row in grid])
+    assert [set(t["sellers"]) for t in tables] == [{"tong", "springcityshopart", "punganterdesign"}, {"huyen", "van", "linh"}]
+    table, rows, missing = best(tables, ["Huyền HTN.ETS", "Khoa NT"])
+    assert table is tables[1] and [r["name"] for r in rows] == ["Huyền"] and missing == ["Khoa NT"]
+    assert rows[0]["share"][10] == 0.506  # the sellers' % block, not the accounts'
+
+
 def test_trackingis_sellers_match_the_rows_of_their_first_name():
-    sellers = parse(HEADER, ROWS)["sellers"]
+    sellers = parse(HEADER, ROWS)[0]["sellers"]
     for name in ("Linh PT.ETS", "LinhPT", "linh", "Linh"):
         assert match(sellers, name)["name"] == "Linh", name
     assert match(sellers, "Huyen NT") is sellers["huyen"] and match(sellers, "VânPT") is sellers["van"]

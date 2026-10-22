@@ -32,6 +32,10 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, dict[str, 
         raise AppError(422, "SELLER_CF_LAYOUT", 'A seller CF sheet has no month (MM-YYYY) in its header row')
     start = next((i for i, r in enumerate(grid) if r and r[0].strip().lower().startswith(SECTION)), None)
     if start is None:
+        if any(c.strip().lower().startswith(SECTION) for r in grid for c in r):  # finance's summary tab, not a team's
+            raise AppError(422, "SELLER_CF_LAYOUT", 'This is a summary tab ("PL Seller Etsy_Monthly"?): its seller rows are '
+                           'formulas Lark only returns as January. Pick instead the tab "1.2 P&L Seller (Sau IP)_Monthly" '
+                           'of each team\'s P&L file (Etsy 1, 2, 3)')
         raise AppError(422, "SELLER_CF_LAYOUT", 'A seller CF sheet has no "Profit tính KPI" section')
     out: dict[str, dict[str, Any]] = {}
     for i, row in enumerate(grid[start:]):
@@ -81,8 +85,7 @@ def lines(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
     plan_sheet = db.get(SheetSource, rt.seller_plan_sheet_id) if rt.seller_plan_sheet_id else None
     if plan_sheet is not None and plan_sheet.rows:
         try:
-            parsed = seller_plan.parse(plan_sheet.header or [], plan_sheet.rows)
-            rows = _rows(parsed["sellers"], picked)
+            parsed, rows, _ = seller_plan.best(seller_plan.parse(plan_sheet.header or [], plan_sheet.rows), picked)
             for month in family_plan.month_days(q.date_from, q.date_to):
                 if rows and int(month[:2]) in parsed["months"]:
                     plan[month] = sum(r["pl2"][int(month[:2])] for r in rows)
