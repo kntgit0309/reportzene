@@ -23,27 +23,33 @@ def _row(*cells: str) -> dict[str, str]:
 ROWS = [
     _row("", "$118,409", "$18,087", "$61,988", "$38,334", "", "100%", "100%", "100%"),  # the sellers' total: no name
     _row("Mai"),  # no plan yet
-    _row("Huyền", "$55,747", "$9,149", "$25,598", "$21,000", "", "51%", "41%", "55%"),
-    _row("Vân", "$14,572", "$0", "$11,240", "$3,332", "", "0%", "18%", "9%"),
-    _row("Linh", "$57,445", "8,938", "25,150", "23,357", "", "49%", "41%", "61%"),
+    _row("Huyền", "$55,747", "$9,149", "$25,598", "$21,000", "", "50.6%", "41.3%", "44.4%"),
+    _row("Vân", "$14,572", "$0", "$11,240", "$3,332", "", "0%", "18.1%", "7.0%"),
+    _row("Linh", "$57,445", "8,938", "25,150", "23,357", "", "49.4%", "40.6%", "48.6%"),
+    _row(),  # the sellers' table ends here: what follows (per team) is not sellers
+    _row("Etsy 1", "$66,110", "$16,275", "$26,240", "$23,595", "", "25%", "13%", "14%"),
 ]
-OCT_LINH = 8938 / (9149 + 0 + 8938)
+OCT_LINH = 0.494  # the sheet's own share (its % columns)
 
 
 def test_seller_rows_and_months_are_read_from_the_dollar_columns():
     plan = parse(HEADER, ROWS)
     assert plan["months"] == [10, 11, 12] and set(plan["sellers"]) == {"huyen", "van", "linh"}  # Mai has no figures
     assert plan["sellers"]["linh"]["pl2"] == {10: 8938, 11: 25150, 12: 23357} and plan["total"][10] == 9149 + 8938
+    assert plan["sellers"]["linh"]["share"] == {10: 0.494, 11: 0.406, 12: 0.486}  # the % block: "49.4%" → 0.494
     # the label row can also sit under the sheet's header row
     labels = [f"Column {i}" for i in range(1, 10)]
     shifted = [dict(zip(labels, [r.get(h, "") for h in HEADER], strict=True)) for r in [dict(zip(HEADER, HEADER, strict=True)), *ROWS]]
     assert parse(labels, shifted)["sellers"]["huyen"]["pl2"][11] == 25598
     assert name_key("Linh PT.ETS") == name_key("linh") == "linh" and name_key("Thuỷ NT") == "thuy"
     # a stray label further left (a team, a note on the total row) does not take the names' place
-    stray = [{**r, "Seller": r["Seller"]} for r in ROWS]
+    # (here a table on the left runs on past the sellers' last row)
     wide = ["Team", *HEADER]
-    rows = [dict(zip(wide, ["Etsy 2" if i == 0 else "", *[r[h] for h in HEADER]], strict=True)) for i, r in enumerate(stray)]
+    rows = [dict(zip(wide, [f"note {i}", *[r[h] for h in HEADER]], strict=True)) for i, r in enumerate(ROWS)]
     assert set(parse(wide, rows)["sellers"]) == {"huyen", "van", "linh"}
+    # without the % columns, a share is the seller's dollars / the sellers' total
+    dollars = parse(HEADER[:5], [{h: r[h] for h in HEADER[:5]} for r in ROWS])
+    assert dollars["sellers"]["linh"]["share"] == {} and dollars["total"][10] == 9149 + 8938
 
 
 def test_trackingis_sellers_match_the_rows_of_their_first_name():
