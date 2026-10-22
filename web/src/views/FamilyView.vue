@@ -93,7 +93,7 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-const subtitle = computed(() => `ZenE sales of ${fam.plural} by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
+const subtitle = computed(() => `${auth.ownSalesOnly.value ? 'Your own' : 'ZenE'} sales of ${fam.plural} by product type · ${applied.value.date_from} → ${applied.value.date_to}`)
 // A family of a single product type (Shirt): the day chart stacks its sub product types
 const oneType = computed(() => (data.value?.groups.length ?? 0) === 1)
 
@@ -170,7 +170,8 @@ function exportCsv() {
     </div>
   </div>
 
-  <div v-if="data" class="section-card">
+  <!-- the seller version (own sales only) shows actuals only: the plans are per store / team -->
+  <div v-if="data && !auth.ownSalesOnly.value" class="section-card">
     <h3 class="card-title !mb-1">Actual vs plan (pieces)</h3>
     <div v-if="hasPlan" class="mb-3 text-xs text-muted">{{ planSource }}</div>
     <el-alert v-if="!hasPlan" type="info" :closable="false" show-icon :title="plan?.error" class="!mt-2">

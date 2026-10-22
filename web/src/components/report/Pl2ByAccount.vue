@@ -113,7 +113,7 @@ function exportCsv() {
 <template>
   <div class="section-card">
     <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
-      <h3 class="card-title !mb-0">PL2 by account: KT vs CF</h3>
+      <h3 class="card-title !mb-0">{{ hasCf ? 'PL2 by account: KT vs CF' : 'Sales and PL2 KT by account' }}</h3>
       <div class="flex items-center gap-3">
         <el-switch v-model="showChart" active-text="Chart" />
         <el-button size="small" type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
@@ -123,7 +123,7 @@ function exportCsv() {
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!my-3" />
     <template v-else-if="data">
       <el-alert v-if="data.kt.error" type="info" :closable="false" show-icon :title="data.kt.error" class="!my-3" />
-      <el-alert v-if="!hasCf" type="info" :closable="false" show-icon :title="cf?.error" class="!my-3">
+      <el-alert v-if="!hasCf && !auth.ownSalesOnly.value" type="info" :closable="false" show-icon :title="cf?.error" class="!my-3">
         <RouterLink v-if="auth.isAdmin.value && cf?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
       </el-alert>
       <el-alert v-for="w in cf?.warnings ?? []" :key="w" type="warning" :closable="false" show-icon :title="w" class="!my-3" />
