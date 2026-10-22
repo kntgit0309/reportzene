@@ -14,7 +14,7 @@ from app.models import AppSetting
 KEY = "runtime"
 SECRET_FIELDS = ("trackingis_token", "lark_app_secret")
 PLAIN_FIELDS = ("lark_app_id", "sheet_sync_at")  # sheet_sync_at "" = no daily sync
-LIST_FIELDS = ("default_teams",)
+LIST_FIELDS = ("default_teams", "seller_cf_sheets")  # seller_cf_sheets: team sheet ids
 INT_FIELDS = ("plan_sheet_id", "plan_start_column", "plan_products", "pl2_cf_sheet_id", "pl2_account_sheet_id",
               "account_list_sheet_id", "seller_plan_sheet_id")  # sheet ids: 0 = none
 OTHER_PL2_DEFAULT = 7.0  # PL2 per item of Other products ($), the user's figure of 2026-10-20: KHKD has no line for them
@@ -34,6 +34,7 @@ class Runtime:
     plan_products: int = 11
     pl2_cf_sheet_id: int | None = None  # finance's monthly PL2 ("Tổng kết PL Monthly", PL2 theo CF) for Etsy › Report
     pl2_account_sheet_id: int | None = None  # finance's PL2 per account ("PL Account Etsy_Monthly") for Etsy › Report
+    seller_cf_sheets: tuple[int, ...] = ()  # "1.2 P&L Seller (Sau IP)_Monthly" of each team: a seller's PL2 theo CF
     seller_plan_sheet_id: int | None = None  # "KH quý 4.2026 theo seller": each seller's PL2 plan per month (share of ZenE's)
     account_list_sheet_id: int | None = None  # the account list ("Acc đã bàn giao Seller": Shop Name, Team) naming its rows
     other_pl2_per_item: float | None = OTHER_PL2_DEFAULT  # PL2 per item of Other products for PL2 theo KT; None = none
@@ -107,6 +108,7 @@ def runtime(db: Session) -> Runtime:
         pl2_account_sheet_id=int(s.get("pl2_account_sheet_id") or 0) or None,
         account_list_sheet_id=int(s.get("account_list_sheet_id") or 0) or None,
         seller_plan_sheet_id=int(s.get("seller_plan_sheet_id") or 0) or None,
+        seller_cf_sheets=tuple(int(x) for x in _split(s.get("seller_cf_sheets")) if x.isdigit()),
         other_pl2_per_item=float(s.get("other_pl2_per_item", OTHER_PL2_DEFAULT) or 0) or None,  # 0 saved = none
         family_plan_sheets=_plan_sheets(s),
         account_replacements=tuple((r["suspended"], r["replacement"]) for r in s.get("account_replacements") or []),
@@ -133,7 +135,7 @@ def status(db: Session) -> dict[str, Any]:
             "plan_sheet_id": rt.plan_sheet_id, "plan_start_column": rt.plan_start_column, "plan_products": rt.plan_products,
             "pl2_cf_sheet_id": rt.pl2_cf_sheet_id, "pl2_account_sheet_id": rt.pl2_account_sheet_id,
             "account_list_sheet_id": rt.account_list_sheet_id, "other_pl2_per_item": rt.other_pl2_per_item,
-            "seller_plan_sheet_id": rt.seller_plan_sheet_id,
+            "seller_plan_sheet_id": rt.seller_plan_sheet_id, "seller_cf_sheets": list(rt.seller_cf_sheets),
             "family_plan_sheets": rt.family_plan_sheets,
             "account_replacements": [{"suspended": old, "replacement": new} for old, new in rt.account_replacements]}
 

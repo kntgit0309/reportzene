@@ -81,7 +81,7 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-// seller version (a member limited to their own sales): their results and their share of the plan; no finance (CF) block
+// seller version (a member limited to their own sales): their results, their share of the plan and their own CF
 const seller = auth.ownSalesOnly
 const subtitle = computed(() => `${seller.value ? 'Your own Etsy sales' : 'ZenE Etsy sales'} from trackingis · ${applied.value.date_from} → ${applied.value.date_to}`)
 
@@ -106,7 +106,7 @@ onMounted(loadTotals)
 
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams" @apply="apply" @reset="reset" />
 
-  <Pl2Comparison v-if="!seller" ref="pl2" :params="applied" />
+  <Pl2Comparison ref="pl2" :params="applied" />
 
   <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
     <div v-for="k in kpis" :key="k.label" class="kpi">

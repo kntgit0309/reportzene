@@ -17,6 +17,7 @@ type Status = {
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; pl2_cf_sheet_id: number | null
   pl2_account_sheet_id: number | null; account_list_sheet_id: number | null // PL2 per account (Etsy › Report)
   seller_plan_sheet_id: number | null // "KH quý 4.2026 theo seller": a seller's share of ZenE's PL2 plan per month
+  seller_cf_sheets: number[] // "1.2 P&L Seller (Sau IP)_Monthly" of each team: a seller's PL2 theo CF
   other_pl2_per_item: number | null // PL2/item of Other products ($) for PL2 KT; KHKD has no line for them
   family_plan_sheets: Partial<Record<FamilyKey, number>> // product family (Etsy › Ornament…) → its plan sheet
   account_replacements: AccountReplacement[]
@@ -29,7 +30,7 @@ const form = reactive({ trackingis_token: '', default_teams: [] as number[], lar
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
   pl2_cf_sheet_id: null as number | null | undefined, pl2_account_sheet_id: null as number | null | undefined,
   account_list_sheet_id: null as number | null | undefined, other_pl2_per_item: 7 as number | undefined,
-  seller_plan_sheet_id: null as number | null | undefined,
+  seller_plan_sheet_id: null as number | null | undefined, seller_cf_sheets: [] as number[],
   family_plan_sheets: {} as Partial<Record<FamilyKey, number | null>>, account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
 const shops = ref<Option[]>([])
@@ -44,7 +45,7 @@ function fill(s: Status) {
     default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
     pl2_cf_sheet_id: s.pl2_cf_sheet_id, pl2_account_sheet_id: s.pl2_account_sheet_id, account_list_sheet_id: s.account_list_sheet_id,
-    seller_plan_sheet_id: s.seller_plan_sheet_id,
+    seller_plan_sheet_id: s.seller_plan_sheet_id, seller_cf_sheets: [...(s.seller_cf_sheets ?? [])],
     other_pl2_per_item: s.other_pl2_per_item ?? 0,
     family_plan_sheets: { ...s.family_plan_sheets }, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
 }
@@ -74,6 +75,7 @@ async function save() {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
       pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0, pl2_account_sheet_id: form.pl2_account_sheet_id ?? 0,
       account_list_sheet_id: form.account_list_sheet_id ?? 0, seller_plan_sheet_id: form.seller_plan_sheet_id ?? 0,
+      seller_cf_sheets: form.seller_cf_sheets.map(String),
       other_pl2_per_item: form.other_pl2_per_item ?? 0, sheet_sync_at: form.sheet_sync_at || '', // cleared = no daily sync
       family_plan_sheets: Object.fromEntries(FAMILY_LIST.map((f) => [f.key, form.family_plan_sheets[f.key] ?? 0])),
       account_replacements: form.account_replacements.filter((r) => r.suspended.trim() && r.replacement.trim()) })
@@ -182,6 +184,16 @@ async function save() {
               "KH quý 4.2026 theo seller": a label row "PL2 T10 | PL2 T11 | PL2 T12" with each seller's PL2 plan per month (first name
               on the left). A report filtered by seller (admins) scales the plans per product, product type and account by the
               seller's share of that month's PL2 plan. Sellers limited to their own sales keep actuals only.
+            </div>
+          </el-form-item>
+          <el-form-item label="Seller CF sheets (PL2 theo CF of a seller, one per team)">
+            <el-select v-model="form.seller_cf_sheets" multiple clearable placeholder="No seller CF sheets" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              The tab "1.2 P&amp;L Seller (Sau IP)_Monthly" of each team's P&amp;L file (Etsy 1, 2, 3): months in the header row, then the
+              "Profit tính KPI" rows per seller. Finance's "PL Seller Etsy_Monthly" pulls these with formulas Lark's API cannot read,
+              so ReportZenE reads them where they come from. PL2: KT vs CF shows them for a report filtered by seller.
             </div>
           </el-form-item>
           <el-form-item v-for="f in FAMILY_LIST" :key="f.key" :label="`${f.name} plan sheet (Etsy › ${f.name})`">
