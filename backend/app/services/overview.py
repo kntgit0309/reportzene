@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import User
-from app.services import family_plan, family_report, plan, report, settings_store
+from app.services import family_plan, family_report, plan, report, seller_plan, settings_store
 from app.services.families import FAMILIES, OTHERS, PLAN_PRODUCTS
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
 
@@ -88,10 +88,11 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
             raise
 
 
-def _plan(db: Session, q: ReportQuery) -> dict[str, Any]:
+def _plan(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
     """{sheet, months, missing_months, scope, products: {name lower: {plan, plan_month, pl2_per_item, pl2_plan}}, names,
     per_item} for the report's range, or {"error"} when there is no plan or the filters narrow the report below ZenE (then
-    still with names and per_item: PL2 per item applies to any part of the sales)."""
+    still with names and per_item: PL2 per item applies to any part of the sales). Filtered by seller (admin): ZenE's plan
+    × the seller's share of each month's PL2 plan (seller_plan)."""
     try:
         sheet_plan = plan.by_product(db)
     except AppError as exc:
@@ -99,22 +100,28 @@ def _plan(db: Session, q: ReportQuery) -> dict[str, Any]:
     names = [p["product"] for p in sheet_plan["products"]]
     per_item = {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]}
     teams = q.lists.get("teams") or []
-    if (any(q.lists.get(f) for f in ("shops", "sellers", "designers")) or q.texts.get("keyword")
-            or (teams and set(teams) != set(settings_store.runtime(db).default_teams))):
+    seller = seller_plan.shares(db, q, user) if seller_plan.applies(q, user) else None
+    if seller is not None and "error" in seller:
+        return {"error": seller["error"], "names": names, "per_item": per_item}
+    if seller is None and (any(q.lists.get(f) for f in ("shops", "sellers", "designers")) or q.texts.get("keyword")
+                           or (teams and set(teams) != set(settings_store.runtime(db).default_teams))):
         return {"error": f'"{sheet_plan["sheet"]["name"]}" plans per product for ZenE as a whole: clear the team, store, seller, '
                          f'designer and keyword filters to compare with it', "names": names, "per_item": per_item}
     days = family_plan.month_days(q.date_from, q.date_to)
     index = {m: i for i, m in enumerate(sheet_plan["months"])}
-    covered = [{"month": m, "days": d, "month_days": md} for m, (d, md) in days.items() if m in index]
+    share = seller["factors"] if seller else None  # a seller: their share of each month
+    covered = [{"month": m, "days": d, "month_days": md, "factor": share[m] if share else 1.0}
+               for m, (d, md) in days.items() if m in index and (share is None or m in share)]
     out: dict[str, dict[str, Any]] = {}
     for p in sheet_plan["products"]:
         sales, pl2 = p["sales"], p["pl2"]
-        pcs = sum((sales[index[c["month"]]] or 0) * c["days"] / c["month_days"] for c in covered)
-        profit = sum((pl2[index[c["month"]]] or 0) * c["days"] / c["month_days"] for c in covered)
-        out[p["product"].lower()] = {"plan": pcs, "plan_month": sum(sales[index[c["month"]]] or 0 for c in covered),
+        pcs = sum((sales[index[c["month"]]] or 0) * c["factor"] * c["days"] / c["month_days"] for c in covered)
+        profit = sum((pl2[index[c["month"]]] or 0) * c["factor"] * c["days"] / c["month_days"] for c in covered)
+        out[p["product"].lower()] = {"plan": pcs, "plan_month": sum((sales[index[c["month"]]] or 0) * c["factor"] for c in covered),
                                      "pl2_per_item": p["pl2_per_item"], "pl2_plan": profit}
-    return {"sheet": sheet_plan["sheet"], "months": covered, "missing_months": [m for m in days if m not in index], "scope": "ZenE",
-            "products": out, "names": names, "per_item": per_item}
+    months = [{k: v for k, v in c.items() if k != "factor"} for c in covered]
+    return {"sheet": sheet_plan["sheet"], "months": months, "missing_months": [m for m in days if m not in {c["month"] for c in covered}],
+            "scope": seller["label"] if seller else "ZenE", "products": out, "names": names, "per_item": per_item}
 
 
 def _metrics(totals: dict[str, Any] | None) -> dict[str, Any]:
@@ -139,7 +146,7 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     plan, query}. Rows follow the plan's products, then Other products; plan fields are absent when the plan does not compare
     (no plan, or filters below ZenE); pl2_per_item / pl2_est are absent only when there is no plan sheet to read."""
     q = report.build_query(db, {**params, "view": "date"}, user)
-    plan_info = _plan(db, q)
+    plan_info = _plan(db, q, user)
     names = plan_info.pop("names", [])
     names += [n for n in _default_names() if n.lower() not in {x.lower() for x in names}]  # a page the plan does not list
     by_name = plan_info.pop("products", {})

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import SheetSource, User
-from app.services import family_accounts, family_plan, family_report, overview, report, settings_store
+from app.services import family_accounts, family_plan, family_report, overview, report, seller_plan, settings_store
 from app.services.families import FAMILIES
 from app.services.plan import _num
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
@@ -123,7 +123,7 @@ def _cf(db: Session, q: ReportQuery) -> dict[str, Any]:
                                                       "months": parsed["months"], "warnings": parsed["warnings"]}}
 
 
-def _kh_accounts(db: Session, date_from: str, date_to: str) -> list[dict[str, Any]]:
+def _kh_accounts(db: Session, date_from: str, date_to: str, factors: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """The stores of the KH sheets (Settings › Plan, product pages), in sheet order, suspended ones replaced, each with its
     plan for the range (pieces, months pro rata of the days) added up over the sheets; None when no sheet plans those months."""
     rt = settings_store.runtime(db)
@@ -137,7 +137,7 @@ def _kh_accounts(db: Session, date_from: str, date_to: str) -> list[dict[str, An
         except AppError:
             continue
         if parsed["per_store"]:
-            planned = family_plan.shop_plans(parsed, date_from, date_to)
+            planned = family_plan.shop_plans(parsed, date_from, date_to, factors=factors)
             for s in planned["shops"]:
                 a = seen.setdefault(_key(s["shop"]), {"name": s["shop"], "team": s["team"], "plan": None})
                 if planned["months"]:  # the sheet plans some month of the range
@@ -205,7 +205,10 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
     # seller / designer / keyword filters (and a member limited to their own sales) cut across stores: then only the KH
     # accounts with such sales are listed, without their store plan
     narrowed = any(q.lists.get(f) for f in ("sellers", "designers")) or bool(q.texts.get("keyword"))
-    kh = _kh_accounts(db, q.date_from, q.date_to)
+    # filtered by seller (admin): each account's plan × the seller's share of the month (seller_plan); else none when narrowed
+    seller = seller_plan.shares(db, q, user) if seller_plan.applies(q, user) else None
+    factors = seller["factors"] if seller and "factors" in seller else None
+    kh = _kh_accounts(db, q.date_from, q.date_to, factors)
     accounts = []
     for a in kh:
         if not kept(a["name"], a["team"]):
@@ -214,7 +217,7 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         if narrowed and not s:
             continue
         accounts.append(_line(a["name"], a["team"], s.get("quantity", 0), s.get("kt", 0.0) if has_kt else None,
-                              b.get("cf", 0.0) if has_cf else None, None if narrowed else a["plan"]))
+                              b.get("cf", 0.0) if has_cf else None, a["plan"] if not narrowed or factors is not None else None))
     planned = {_key(a["name"]) for a in kh}  # every account of the plans, whether the filters keep it or not
     children = []
     for key in sorted(set(stores) | set(booked)):

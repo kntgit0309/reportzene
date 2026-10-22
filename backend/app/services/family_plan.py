@@ -147,29 +147,31 @@ def month_days(date_from: str, date_to: str) -> dict[str, tuple[int, int]]:
 
 
 def shop_plans(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[str] | None = None,
-               shops: set[str] | None = None) -> dict[str, Any]:
+               shops: set[str] | None = None, factors: dict[str, float] | None = None) -> dict[str, Any]:
     """Per kept shop, in sheet order: {shop, team, groups: {product type: {plan (pro rata), plan_month}}}, unrounded;
-    plus the months covered and those the sheet has no plan for. `teams` / `shops`: lower-case names, None = every shop."""
+    plus the months covered and those the sheet has no plan for. `teams` / `shops`: lower-case names, None = every shop.
+    `factors` (a seller's share of each month, seller_plan): the plan × the month's factor; a month without one has no plan."""
     rows = [s for s in parsed["shops"] if (teams is None or s["team"].lower() in teams) and (shops is None or s["shop"].lower() in shops)]
     out: list[dict[str, Any]] = [{"shop": s["shop"], "team": s["team"], "replaces": s.get("replaces", []), "groups": {}} for s in rows]
     covered, missing = [], []
     for month, (days, month_len) in month_days(date_from, date_to).items():
-        if month not in parsed["months"]:
+        if month not in parsed["months"] or (factors is not None and month not in factors):
             missing.append(month)
             continue
         covered.append({"month": month, "days": days, "month_days": month_len})
+        factor = factors[month] if factors is not None else 1.0
         for s, line in zip(rows, out, strict=True):
             for group, pcs in s["plan"].get(month, {}).items():
                 g = line["groups"].setdefault(group, {"plan": 0.0, "plan_month": 0.0})
-                g["plan"] += pcs * days / month_len
-                g["plan_month"] += pcs
+                g["plan"] += pcs * factor * days / month_len
+                g["plan_month"] += pcs * factor
     return {"shops": out, "months": covered, "missing_months": missing}
 
 
 def plan_for(parsed: dict[str, Any], date_from: str, date_to: str, teams: set[str] | None = None,
-             shops: set[str] | None = None) -> dict[str, Any]:
+             shops: set[str] | None = None, factors: dict[str, float] | None = None) -> dict[str, Any]:
     """Plan per product type for the range, over the kept shops: `plan` (pro rata) and `plan_month` (the whole months)."""
-    per_shop = shop_plans(parsed, date_from, date_to, teams, shops)
+    per_shop = shop_plans(parsed, date_from, date_to, teams, shops, factors)
     groups: dict[str, dict[str, float]] = {}
     for line in per_shop["shops"]:
         for group, p in line["groups"].items():
@@ -188,8 +190,9 @@ def _names(db: Session, user: User | None, kind: str, ids: list[str]) -> set[str
 
 
 def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """{source, parsed, teams, shops, label}: the family's plan sheet and the teams / stores the report's filters keep,
-    or {"error": why there is no plan to compare with}."""
+    """{source, parsed, teams, shops, label, factors}: the family's plan sheet and the teams / stores the report's filters keep,
+    or {"error": why there is no plan to compare with}. Filtered by seller (admin): the whole sheet × the seller's share."""
+    from app.services import seller_plan  # it uses month_days from here
     rt = settings_store.runtime(db)
     sheet_id = rt.family_plan_sheets.get(family.key)
     if sheet_id is None:
@@ -199,7 +202,12 @@ def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dic
         return {"error": f"The {family.name.lower()} plan sheet was removed from Team sheets: an admin picks another in Settings → Plan"}
     if not source.rows:
         return {"error": f'"{source.name}" has not been synced yet: sync it in Lark › Team sheets'}
-    if any(q.lists.get(f) for f in ("sellers", "designers")) or q.texts.get("keyword"):
+    seller = None
+    if seller_plan.applies(q, user):
+        seller = seller_plan.shares(db, q, user)
+        if "error" in seller:
+            return seller
+    elif any(q.lists.get(f) for f in ("sellers", "designers")) or q.texts.get("keyword"):
         return {"error": "The plan is per store and team: clear the seller, designer and keyword filters to compare with it"}
     try:
         parsed = replace_accounts(parse(source.header or [], source.rows, family), rt.account_replacements)
@@ -208,10 +216,12 @@ def scope(db: Session, family: Family, q: ReportQuery, user: User | None) -> dic
         shops = _names(db, user, "shops", q.lists["shops"]) if q.lists.get("shops") else None
     except AppError as exc:
         return {"error": exc.message}
+    if seller is not None:  # a seller's plan: their share of the whole sheet, whatever teams are picked
+        return {"source": source, "parsed": parsed, "teams": None, "shops": None, "label": seller["label"], "factors": seller["factors"]}
     if not parsed["per_store"] and (teams or shops):
         return {"error": f'"{source.name}" plans per product for ZenE as a whole: clear the team and store filters to compare with it'}
     label = f"{len(shops)} store(s)" if shops else (", ".join(sorted(t.title() for t in teams)) if teams else "ZenE")
-    return {"source": source, "parsed": parsed, "teams": teams, "shops": shops, "label": label}
+    return {"source": source, "parsed": parsed, "teams": teams, "shops": shops, "label": label, "factors": None}
 
 
 def sheet_info(source: SheetSource) -> dict[str, Any]:
@@ -224,5 +234,5 @@ def for_report(db: Session, family: Family, q: ReportQuery, user: User | None) -
     s = scope(db, family, q, user)
     if "error" in s:
         return s
-    result = plan_for(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
+    result = plan_for(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"], s["factors"])
     return {"sheet": sheet_info(s["source"]), "scope": s["label"], **result}

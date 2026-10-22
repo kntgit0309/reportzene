@@ -101,8 +101,10 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
         plan_info = {"error": f'"{s["source"].name}" plans per product for ZenE as a whole, not per store: '
                               f'the product type table above compares with it'}
     if not plan_info:
-        per_shop = family_plan.shop_plans(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"])
+        per_shop = family_plan.shop_plans(s["parsed"], q.date_from, q.date_to, s["teams"], s["shops"], s["factors"])
         plans = per_shop["shops"]
+        if s["factors"] is not None:  # a seller's plan: only the stores they sold in, each with its plan × their share
+            plans = [p for p in plans if _key(p["shop"]) in actual]
         plan_info = {"sheet": family_plan.sheet_info(s["source"]), "scope": s["label"], "months": per_shop["months"],
                      "missing_months": per_shop["missing_months"]}
     has_plan = "error" not in plan_info
