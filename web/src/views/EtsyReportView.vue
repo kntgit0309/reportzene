@@ -9,6 +9,7 @@ import Pl2Comparison from '../components/report/Pl2Comparison.vue'
 import ProductOverview from '../components/report/ProductOverview.vue'
 import ReportBreakdown from '../components/report/ReportBreakdown.vue'
 import ReportFilters from '../components/report/ReportFilters.vue'
+import { auth } from '../lib/auth'
 import { money, num } from '../lib/format'
 import { perDay, rangeDays } from '../lib/plan'
 import { downloadCsv, emptyFilters, fetchTotals, filterParams, rowLabel, VIEWS } from '../lib/report'
@@ -80,7 +81,9 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-const subtitle = computed(() => `ZenE Etsy sales from trackingis · ${applied.value.date_from} → ${applied.value.date_to}`)
+// seller version (a member limited to their own sales): their results only, no plan and no finance (CF) comparison
+const seller = auth.ownSalesOnly
+const subtitle = computed(() => `${seller.value ? 'Your own Etsy sales' : 'ZenE Etsy sales'} from trackingis · ${applied.value.date_from} → ${applied.value.date_to}`)
 
 function exportCsv() {
   const header = ['Name', 'Store', 'Seller', 'Designer', 'Product type', 'Total order', 'Quantity', 'Total', 'Sale tax', 'Revenue']
@@ -103,7 +106,7 @@ onMounted(loadTotals)
 
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams" @apply="apply" @reset="reset" />
 
-  <Pl2Comparison ref="pl2" :params="applied" />
+  <Pl2Comparison v-if="!seller" ref="pl2" :params="applied" />
 
   <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
     <div v-for="k in kpis" :key="k.label" class="kpi">

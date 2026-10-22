@@ -97,7 +97,7 @@ function exportCsv() {
     </div>
     <div v-if="hasPlan" class="mb-3 text-xs text-muted">{{ planSource }}</div>
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!my-3" />
-    <el-alert v-else-if="data && !hasPlan" type="info" :closable="false" show-icon :title="plan?.error" class="!my-3">
+    <el-alert v-else-if="data && !hasPlan && !auth.ownSalesOnly.value" type="info" :closable="false" show-icon :title="plan?.error" class="!my-3">
       <RouterLink v-if="auth.isAdmin.value && plan?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
     </el-alert>
 
