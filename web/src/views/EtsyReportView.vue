@@ -81,7 +81,7 @@ const kpis = computed(() => {
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
   ]
 })
-// seller version (a member limited to their own sales): their results only, no plan and no finance (CF) comparison
+// seller version (a member limited to their own sales): their results and their share of the plan; no finance (CF) block
 const seller = auth.ownSalesOnly
 const subtitle = computed(() => `${seller.value ? 'Your own Etsy sales' : 'ZenE Etsy sales'} from trackingis · ${applied.value.date_from} → ${applied.value.date_to}`)
 

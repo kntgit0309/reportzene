@@ -6,7 +6,7 @@ from app.services import report
 from app.services.families import ORNAMENT
 from app.services.family_plan import parse as parse_kh
 from app.services.family_plan import plan_for
-from app.services.seller_plan import name_key, parse
+from app.services.seller_plan import match, name_key, parse
 from tests.test_ornament_plan import HEADER as KH_HEADER
 from tests.test_ornament_plan import OCT_FELT
 from tests.test_ornament_plan import ROWS as KH_ROWS
@@ -39,6 +39,19 @@ def test_seller_rows_and_months_are_read_from_the_dollar_columns():
     shifted = [dict(zip(labels, [r.get(h, "") for h in HEADER], strict=True)) for r in [dict(zip(HEADER, HEADER, strict=True)), *ROWS]]
     assert parse(labels, shifted)["sellers"]["huyen"]["pl2"][11] == 25598
     assert name_key("Linh PT.ETS") == name_key("linh") == "linh" and name_key("Thuỷ NT") == "thuy"
+    # a stray label further left (a team, a note on the total row) does not take the names' place
+    stray = [{**r, "Seller": r["Seller"]} for r in ROWS]
+    wide = ["Team", *HEADER]
+    rows = [dict(zip(wide, ["Etsy 2" if i == 0 else "", *[r[h] for h in HEADER]], strict=True)) for i, r in enumerate(stray)]
+    assert set(parse(wide, rows)["sellers"]) == {"huyen", "van", "linh"}
+
+
+def test_trackingis_sellers_match_the_rows_of_their_first_name():
+    sellers = parse(HEADER, ROWS)["sellers"]
+    for name in ("Linh PT.ETS", "LinhPT", "linh", "Linh"):
+        assert match(sellers, name)["name"] == "Linh", name
+    assert match(sellers, "Huyen NT") is sellers["huyen"] and match(sellers, "VânPT") is sellers["van"]
+    assert match(sellers, "Linhda") is None and match(sellers, "Khoa NT") is None  # a longer name is someone else
 
 
 def test_a_sellers_share_scales_every_month_of_a_plan():
@@ -72,8 +85,8 @@ def test_admin_filtered_by_seller_gets_their_share_of_the_plan(client, admin, up
     assert "no row for Khoa NT" in unknown["error"]
 
 
-def test_a_member_limited_to_their_own_sales_keeps_actuals_only(client, admin, member, upstream, business_plan, seller_sheet):  # noqa: F811
+def test_a_seller_limited_to_their_own_sales_gets_their_share_too(client, admin, member, upstream, business_plan, seller_sheet):  # noqa: F811
     me = client.get("/api/v1/auth/me", headers=member).json()["data"]
     client.patch(f"/api/v1/users/{me['id']}", json={"scope_sellers": ["41"]}, headers=admin)
-    plan = client.get(V, headers=member).json()["data"]["plan"]
-    assert "error" in plan and "plan" not in client.get(V, headers=member).json()["data"]["rows"][0]
+    data = client.get(V, headers=member).json()["data"]
+    assert "Linh" in data["plan"]["scope"] and data["rows"][0]["plan"] == round(5535 * OCT_LINH * 2 / 31, 1)

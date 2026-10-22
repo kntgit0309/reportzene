@@ -3,10 +3,10 @@ scaled by that seller's share of ZenE's PL2 plan for each month.
 
 The shares come from the seller plan sheet (Settings › Plan, "KH quý 4.2026 theo seller"): a label row with "PL2 T10",
 "PL2 T11", "PL2 T12" (the first such columns hold dollars; a second block of the same labels, the percentages, is not read),
-then one row per seller with their PL2 plan for each month, named in the text cell left of those columns ("Linh"). A
-seller's share of a month = their PL2 / the sellers' total that month. The sheet names sellers by first name; a trackingis
-seller ("Linh PT.ETS") matches the row of their first name, accents left out. A member limited to their own sales keeps the
-actuals-only report (no plan).
+then one row per seller with their PL2 plan for each month, named in the column left of those columns that holds the most
+text ("Linh"). A seller's share of a month = their PL2 / the sellers' total that month. The sheet names sellers by first
+name; a trackingis seller matches the row of their first name, accents left out: "Linh PT.ETS" and "LinhPT" both match
+"Linh". A seller limited to their own sales gets their plan the same way (their sellers are the report's filter).
 """
 import re
 import unicodedata
@@ -43,9 +43,13 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
         if m and 1 <= int(m.group(1)) <= 12:
             columns.setdefault(int(m.group(1)), j)
     first = min(columns.values())
+    body = grid[at + 1:]
+    # the names: the column left of the PL2 columns with the most text (other columns may hold a stray label or a team)
+    counts = {j: sum(1 for r in body if j < len(r) and r[j] and _num(r[j]) is None) for j in range(first)}
+    name_col = max(counts, key=lambda j: (counts[j], j)) if counts and max(counts.values()) else None
     sellers: dict[str, dict[str, Any]] = {}
-    for row in grid[at + 1:]:
-        name = next((c for c in reversed(row[:first]) if c and _num(c) is None), "")  # the text cell left of the PL2 columns
+    for row in body:
+        name = row[name_col] if name_col is not None and name_col < len(row) else ""
         values = {m: _num(row[j]) if j < len(row) else None for m, j in columns.items()}
         if name and any(v is not None for v in values.values()):
             sellers.setdefault(name_key(name), {"name": name, "pl2": {m: v or 0.0 for m, v in values.items()}})
@@ -56,10 +60,23 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def applies(q: ReportQuery, user: User | None) -> bool:
-    """A report filtered by seller only (teams aside), for someone who sees the whole of ZenE."""
-    if user is not None and user.seller_scope is not None:
-        return False  # their own sales: the seller version shows actuals only
+    """A report filtered by seller only (teams aside): an admin's seller filter, or a seller's own report."""
     return bool(q.lists.get("sellers")) and not (q.lists.get("shops") or q.lists.get("designers") or q.texts.get("keyword"))
+
+
+def _plain(name: Any) -> str:
+    text = str(name or "").replace("đ", "d").replace("Đ", "D")
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def match(sellers: dict[str, dict[str, Any]], name: str) -> dict[str, Any] | None:
+    """The sheet row of a trackingis seller: their first word ("Linh PT.ETS" → "linh"), else a row name followed by
+    capitals ("LinhPT" → "Linh", not "AnhTT" → "An"), the longest one when several fit."""
+    if name_key(name) in sellers:
+        return sellers[name_key(name)]
+    compact = re.sub(r"[\s.]+", "", _plain(name))
+    fits = [k for k in sellers if compact.lower().startswith(k) and (len(compact) == len(k) or not compact[len(k)].islower())]
+    return sellers[max(fits, key=len)] if fits else None
 
 
 def shares(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
@@ -78,10 +95,12 @@ def shares(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
         return {"error": exc.message}
     names = {str(o["id"]): str(o["name"]) for o in report.filter_options(db, "sellers", user)}
     picked = [names.get(s, s) for s in q.lists["sellers"]]
-    rows = [parsed["sellers"][name_key(n)] for n in picked if name_key(n) in parsed["sellers"]]
-    missing = [n for n in picked if name_key(n) not in parsed["sellers"]]
+    found = {n: match(parsed["sellers"], n) for n in picked}
+    rows = list({id(r): r for r in found.values() if r is not None}.values())  # two trackingis sellers can share a row
+    missing = [n for n, r in found.items() if r is None]
     if not rows:
-        return {"error": f'The seller plan sheet has no row for {", ".join(picked)} (it names sellers by first name)'}
+        listed = ", ".join(s["name"] for s in parsed["sellers"].values())
+        return {"error": f'The seller plan sheet has no row for {", ".join(picked)} (its rows: {listed})'}
     factors: dict[str, float] = {}
     for month in family_plan.month_days(q.date_from, q.date_to):
         m = int(month[:2])

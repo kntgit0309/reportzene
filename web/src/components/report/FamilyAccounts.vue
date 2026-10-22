@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { auth } from '../../lib/auth'
 import { money, num, pct } from '../../lib/format'
 import { bar, barColor, gapClass, gapOf, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
 import type { Family } from '../../lib/families'
@@ -53,7 +52,7 @@ function exportCsv() {
       <el-button size="small" type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
     </div>
     <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon class="!mb-3" />
-    <el-alert v-else-if="report && !hasPlan && !auth.ownSalesOnly.value" type="info" :title="report.plan.error" :closable="false" show-icon class="!mb-3" />
+    <el-alert v-else-if="report && !hasPlan" type="info" :title="report.plan.error" :closable="false" show-icon class="!mb-3" />
 
     <el-table v-loading="loading" :data="rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="rowClass"
               show-summary :summary-method="footer" :empty-text="`No sales of ${family.plural} for these filters`" class="w-full">
