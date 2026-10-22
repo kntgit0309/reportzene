@@ -17,12 +17,13 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import SheetSource, User
-from app.services import family_plan, overview, report, settings_store
+from app.services import family_plan, overview, report, seller_cf, seller_plan, settings_store
 from app.services.plan import _num
 from app.services.trackingis import ReportQuery
 
 SECTIONS = (("kế hoạch", "plan"), ("thực đạt", "actual"))
 ZENE = "zene"
+SELLER = "seller"  # the line of the sellers a report is filtered by (seller_cf)
 
 
 def _team(label: str) -> str:
@@ -61,7 +62,14 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _scope(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """{source, parsed, keys, label}: the CF lines the report's filters select (B.U ZenE, or the teams picked), or {"error"}."""
+    """{source, parsed, keys, label}: the CF lines the report's filters select (B.U ZenE, or the teams picked), or {"error"}.
+    Filtered by seller (an admin's filter or a seller's own report): the sellers' "Profit tính KPI" and PL2 plan (seller_cf)."""
+    if seller_plan.applies(q, user):
+        got = seller_cf.lines(db, q, user)
+        if "error" in got:
+            return got
+        return {"source": got["source"], "parsed": {"months": got["months"], "lines": {SELLER: got["line"]}}, "keys": [SELLER],
+                "label": got["label"]}
     rt = settings_store.runtime(db)
     if rt.pl2_cf_sheet_id is None:
         return {"error": "No PL2 CF sheet yet: an admin picks it in Settings → Plan"}
