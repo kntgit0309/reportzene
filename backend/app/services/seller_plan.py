@@ -31,49 +31,100 @@ def name_key(name: Any) -> str:
     return words[0] if words else ""
 
 
-def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """{months: [10, 11, 12], sellers: {name key: {name, pl2: {month number: $}}}, total: {month number: $}}."""
-    grid = [list(header), *([str(r.get(h) or "").strip() for h in header] for r in rows)]
-    at = next((i for i, row in enumerate(grid) if any(LABEL.match(c.strip()) for c in row)), None)
-    if at is None:
-        raise AppError(422, "SELLER_PLAN_LAYOUT", 'The seller plan sheet has no "PL2 T10"-style label row (PL2 per month per seller)')
-    columns: dict[int, int] = {}  # month number → its column in the first block (dollars)
-    shares: dict[int, int] = {}  # … and in the second block of the same labels (the sheet's own share, "14%")
-    for j, cell in enumerate(grid[at]):
+def _groups(labels: list[str]) -> list[dict[int, int]]:
+    """The label row's blocks of "PL2 T10 | PL2 T11 | PL2 T12": month number → column, a new block at a gap or a repeat."""
+    groups: list[dict[int, int]] = []
+    previous = None
+    for j, cell in enumerate(labels):
         m = LABEL.match(cell.strip())
-        if m and 1 <= int(m.group(1)) <= 12:
-            (shares if int(m.group(1)) in columns else columns).setdefault(int(m.group(1)), j)
+        if not m or not 1 <= int(m.group(1)) <= 12:
+            continue
+        month = int(m.group(1))
+        if not groups or month in groups[-1] or previous != j - 1:
+            groups.append({})
+        groups[-1][month] = j
+        previous = j
+    return groups
+
+
+def _is_share(rows: list[list[str]], group: dict[int, int]) -> bool:
+    """A block of shares ("14%", 0.14) rather than dollars."""
+    cells = [r[j] for r in rows for j in group.values() if j < len(r) and _num(r[j]) is not None]
+    return bool(cells) and 2 * sum(c.endswith("%") or abs(_num(c) or 0) <= 1.5 for c in cells) > len(cells)
+
+
+def _table(after: list[list[str]], columns: dict[int, int], shares: dict[int, int], left_bound: int) -> dict[str, Any] | None:
+    """One table: its names (the nearest mostly-text column left of its dollars, right of `left_bound`), down to its first
+    empty row; None when it has no named row with figures."""
     first, last = min(columns.values()), max([*columns.values(), *shares.values()])
-    after = grid[at + 1:]
-    # the names: going left from the PL2 columns, the first column that holds mostly text where there are dollars ("Quý IV",
-    # a total, is numbers; a table further left is not looked at)
     valued = [r for r in after if any(j < len(r) and _num(r[j]) is not None for j in columns.values())]
     name_col = None
-    for j in range(first - 1, -1, -1):
+    for j in range(first - 1, left_bound, -1):
         filled = [r[j] for r in valued if j < len(r) and r[j]]
         if filled and 2 * sum(_num(c) is None for c in filled) > len(filled):
             name_col = j
             break
-    # the sellers' table ends at its first empty row (names to percentages): a table further down (per team…) is not sellers
+    if name_col is None:
+        return None
     body: list[list[str]] = []
-    left = name_col if name_col is not None else first
-    for row in after:
-        if not any(row[left:last + 1]):
+    for row in after:  # the table ends at its first empty row: a table further down (per team…) is something else
+        if not any(row[name_col:last + 1]):
             if body:
                 break
             continue
         body.append(row)
     sellers: dict[str, dict[str, Any]] = {}
     for row in body:
-        name = row[name_col] if name_col is not None and name_col < len(row) else ""
+        name = row[name_col] if name_col < len(row) else ""
         values = {m: _num(row[j]) if j < len(row) else None for m, j in columns.items()}
         if name and any(v is not None for v in values.values()):
             share = {m: _share(row[j]) for m, j in shares.items() if j < len(row) and _share(row[j]) is not None}
             sellers.setdefault(name_key(name), {"name": name, "pl2": {m: v or 0.0 for m, v in values.items()}, "share": share})
     if not sellers:
+        return None
+    return {"months": sorted(columns), "sellers": sellers, "total": {m: sum(r["pl2"][m] for r in sellers.values()) for m in columns}}
+
+
+def parse(header: list[str], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The tab's tables under a "PL2 T10 | T11 | T12" label row: [{months: [10, 11, 12], sellers: {name key: {name, pl2:
+    {month: $}, share: {month: 0.14}}}, total: {month: $}}]. The same row may hold several tables side by side (per account,
+    per seller): each block of dollars is a table, named by the text column left of it; a block of shares right after a
+    table belongs to it. Which table holds the sellers is decided by their names (best)."""
+    grid = [list(header), *([str(r.get(h) or "").strip() for h in header] for r in rows)]
+    at = next((i for i, row in enumerate(grid) if any(LABEL.match(c.strip()) for c in row)), None)
+    if at is None:
+        raise AppError(422, "SELLER_PLAN_LAYOUT", 'The seller plan sheet has no "PL2 T10"-style label row (PL2 per month per seller)')
+    after = grid[at + 1:]
+    tables: list[dict[str, Any]] = []
+    bound = -1  # tables do not reach left of the previous block
+    groups = _groups(grid[at])
+    for i, group in enumerate(groups):
+        if _is_share(after, group):
+            bound = max(group.values())
+            continue
+        following = groups[i + 1] if i + 1 < len(groups) else None
+        shares = following if following is not None and _is_share(after, following) else {}
+        table = _table(after, group, shares, bound)
+        if table is not None:
+            tables.append(table)
+        bound = max([*group.values(), *shares.values()])
+    if not tables:
         raise AppError(422, "SELLER_PLAN_LAYOUT", "The seller plan sheet has no seller rows under its PL2 labels")
-    total = {m: sum(s["pl2"][m] for s in sellers.values()) for m in columns}
-    return {"months": sorted(columns), "sellers": sellers, "total": total}
+    return tables
+
+
+def best(tables: list[dict[str, Any]], names: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    """(table, its rows of `names`, the names without a row): the table where most of the trackingis sellers have a row."""
+    def rows_of(table: dict[str, Any]) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for name in names:
+            row = match(table["sellers"], name)
+            if row is not None and all(row is not r for r in out):  # two trackingis sellers can share a row
+                out.append(row)
+        return out
+
+    table = max(tables, key=lambda t: len(rows_of(t)))
+    return table, rows_of(table), [n for n in names if match(table["sellers"], n) is None]
 
 
 def _share(cell: str) -> float | None:
@@ -113,16 +164,14 @@ def shares(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
     if not source.rows:
         return {"error": f'"{source.name}" has not been synced yet: sync it in Lark › Team sheets'}
     try:
-        parsed = parse(source.header or [], source.rows)
+        tables = parse(source.header or [], source.rows)
     except AppError as exc:
         return {"error": exc.message}
     names = {str(o["id"]): str(o["name"]) for o in report.filter_options(db, "sellers", user)}
     picked = [names.get(s, s) for s in q.lists["sellers"]]
-    found = {n: match(parsed["sellers"], n) for n in picked}
-    rows = list({id(r): r for r in found.values() if r is not None}.values())  # two trackingis sellers can share a row
-    missing = [n for n, r in found.items() if r is None]
+    parsed, rows, missing = best(tables, picked)
     if not rows:
-        listed = ", ".join(s["name"] for s in parsed["sellers"].values())
+        listed = "; ".join(", ".join(r["name"] for r in t["sellers"].values()) for t in tables)
         return {"error": f'The seller plan sheet has no row for {", ".join(picked)} (its rows: {listed})'}
     factors: dict[str, float] = {}
     for month in family_plan.month_days(q.date_from, q.date_to):
