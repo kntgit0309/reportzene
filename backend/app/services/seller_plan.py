@@ -2,11 +2,11 @@
 scaled by that seller's share of ZenE's PL2 plan for each month.
 
 The shares come from the seller plan sheet (Settings › Plan, "KH quý 4.2026 theo seller"): a label row with "PL2 T10",
-"PL2 T11", "PL2 T12" (the first such columns hold dollars; a second block of the same labels, the percentages, is not read),
-then one row per seller with their PL2 plan for each month, named in the column left of those columns that holds the most
-text ("Linh"). A seller's share of a month = their PL2 / the sellers' total that month. The sheet names sellers by first
-name; a trackingis seller matches the row of their first name, accents left out: "Linh PT.ETS" and "LinhPT" both match
-"Linh". A seller limited to their own sales gets their plan the same way (their sellers are the report's filter).
+"PL2 T11", "PL2 T12" (the first such columns hold dollars, a second block of the same labels the sheet's share, "14%"),
+then one row per seller, named in the nearest text column left of the dollars ("Linh"), down to the table's first empty
+row. A seller's share of a month is the sheet's own share; without the % columns, their PL2 / the sellers' total that
+month. The sheet names sellers by first name; a trackingis seller matches the row of their first name, accents left
+out: "Linh PT.ETS" and "LinhPT" both match "Linh". A seller limited to their own sales gets their plan the same way (their sellers are the report's filter).
 """
 import re
 import unicodedata
@@ -20,7 +20,7 @@ from app.services import family_plan, report, settings_store
 from app.services.plan import _num
 from app.services.trackingis import ReportQuery
 
-LABEL = re.compile(r"^pl2\s*t(\d{1,2})$", re.IGNORECASE)
+LABEL = re.compile(r"^pl2\s*t(\d{1,2})(\s*\(\d+\))?$", re.IGNORECASE)  # "PL2 T10", or "PL2 T10 (2)" as a repeated header
 
 
 def name_key(name: Any) -> str:
@@ -37,26 +37,49 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
     at = next((i for i, row in enumerate(grid) if any(LABEL.match(c.strip()) for c in row)), None)
     if at is None:
         raise AppError(422, "SELLER_PLAN_LAYOUT", 'The seller plan sheet has no "PL2 T10"-style label row (PL2 per month per seller)')
-    columns: dict[int, int] = {}  # month number → its column (the first block: dollars)
+    columns: dict[int, int] = {}  # month number → its column in the first block (dollars)
+    shares: dict[int, int] = {}  # … and in the second block of the same labels (the sheet's own share, "14%")
     for j, cell in enumerate(grid[at]):
         m = LABEL.match(cell.strip())
         if m and 1 <= int(m.group(1)) <= 12:
-            columns.setdefault(int(m.group(1)), j)
-    first = min(columns.values())
-    body = grid[at + 1:]
-    # the names: the column left of the PL2 columns with the most text (other columns may hold a stray label or a team)
-    counts = {j: sum(1 for r in body if j < len(r) and r[j] and _num(r[j]) is None) for j in range(first)}
-    name_col = max(counts, key=lambda j: (counts[j], j)) if counts and max(counts.values()) else None
+            (shares if int(m.group(1)) in columns else columns).setdefault(int(m.group(1)), j)
+    first, last = min(columns.values()), max([*columns.values(), *shares.values()])
+    after = grid[at + 1:]
+    # the names: going left from the PL2 columns, the first column that holds mostly text where there are dollars ("Quý IV",
+    # a total, is numbers; a table further left is not looked at)
+    valued = [r for r in after if any(j < len(r) and _num(r[j]) is not None for j in columns.values())]
+    name_col = None
+    for j in range(first - 1, -1, -1):
+        filled = [r[j] for r in valued if j < len(r) and r[j]]
+        if filled and 2 * sum(_num(c) is None for c in filled) > len(filled):
+            name_col = j
+            break
+    # the sellers' table ends at its first empty row (names to percentages): a table further down (per team…) is not sellers
+    body: list[list[str]] = []
+    left = name_col if name_col is not None else first
+    for row in after:
+        if not any(row[left:last + 1]):
+            if body:
+                break
+            continue
+        body.append(row)
     sellers: dict[str, dict[str, Any]] = {}
     for row in body:
         name = row[name_col] if name_col is not None and name_col < len(row) else ""
         values = {m: _num(row[j]) if j < len(row) else None for m, j in columns.items()}
         if name and any(v is not None for v in values.values()):
-            sellers.setdefault(name_key(name), {"name": name, "pl2": {m: v or 0.0 for m, v in values.items()}})
+            share = {m: _share(row[j]) for m, j in shares.items() if j < len(row) and _share(row[j]) is not None}
+            sellers.setdefault(name_key(name), {"name": name, "pl2": {m: v or 0.0 for m, v in values.items()}, "share": share})
     if not sellers:
         raise AppError(422, "SELLER_PLAN_LAYOUT", "The seller plan sheet has no seller rows under its PL2 labels")
     total = {m: sum(s["pl2"][m] for s in sellers.values()) for m in columns}
     return {"months": sorted(columns), "sellers": sellers, "total": total}
+
+
+def _share(cell: str) -> float | None:
+    """The sheet's share of a month: "14%" or 0.14 → 0.14."""
+    v = _num(cell)
+    return None if v is None else v / 100 if v > 1 else v
 
 
 def applies(q: ReportQuery, user: User | None) -> bool:
@@ -104,7 +127,9 @@ def shares(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
     factors: dict[str, float] = {}
     for month in family_plan.month_days(q.date_from, q.date_to):
         m = int(month[:2])
-        if parsed["total"].get(m):
+        if all(m in r["share"] for r in rows):  # the sheet's own share (its % columns), as the team reads it
+            factors[month] = sum(r["share"][m] for r in rows)
+        elif parsed["total"].get(m):  # no % columns: the seller's dollars / the sellers' total
             factors[month] = sum(r["pl2"][m] for r in rows) / parsed["total"][m]
     if not factors:
         return {"error": "The seller plan sheet has no PL2 for the months of this range"}
