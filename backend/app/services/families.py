@@ -54,9 +54,10 @@ ORNAMENT = Family(
                  "shell": "Shell", "felt": "Felt", "ornament khác": "Others"},
     plan_other="Others",
     plan_note='the plan\'s Acrylic and Wood count together as "Acrylic + Wood", "Ornament khác" as Others',
-    # trackingis counts a multi-piece Felt Ornament as 1: 170 pcs missing over 01–18/10/2026
-    quantity_fixes={"Felt Ornament": _spread(170, date(2026, 10, 1), 18)},
-    fix_note="includes pieces trackingis misses, added by hand (Felt Ornament: +170 pcs over 01–18/10/2026)",
+    # trackingis counts a multi-piece Felt Ornament as 1: 170 pcs missing over 01–18/10/2026, then 130 over 19–22/10/2026
+    # (the team's count: 803 pcs to 22/10 against 673 in ReportZenE)
+    quantity_fixes={"Felt Ornament": {**_spread(170, date(2026, 10, 1), 18), **_spread(130, date(2026, 10, 19), 4)}},
+    fix_note="includes pieces trackingis misses, added by hand (Felt Ornament: +170 pcs over 01–18/10 and +130 over 19–22/10/2026)",
 )
 
 # One product type: the plan's T-shirt and Sweatshirt columns are compared together, the sub product types are actuals only
