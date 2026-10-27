@@ -5,7 +5,7 @@ import pytest
 
 from app.models import SheetSource
 from app.services import report, trackingis
-from app.services.families import FAMILIES, PLAN_PRODUCTS
+from app.services.families import FAMILIES
 from tests.test_plan import HEADER, ROWS  # KHKD "KH theo Product": Ornament, Blanket, Shirt from column Q
 from tests.test_report import _save_token
 
@@ -48,7 +48,7 @@ def test_overview_rows_follow_the_plan_then_every_other_product(client, member, 
     data = client.get(V, headers=member).json()["data"]
 
     # the plan's products, the products with a page the plan does not list, then Other products
-    assert [r["name"] for r in data["rows"]] == ["Ornament", "Blanket", "Shirt", "Flag", "Wooden Block", "Badge Reel", "Quilted",
+    assert [r["name"] for r in data["rows"]] == ["Ornament", "Blanket", "Shirt", "Quilted", "Flag", "Wooden Block", "Badge Reel",
                                                  "Sticker", "Scrub cap", "Fabric Welcome Sign", "Baseball Jersey", "Other products"]
     rows = {r["name"]: r for r in data["rows"]}
     ornament = rows["Ornament"]
@@ -60,7 +60,7 @@ def test_overview_rows_follow_the_plan_then_every_other_product(client, member, 
     assert ornament["achieved"] == round(ornament["total_quantity"] / (5535 * 2 / 31), 4)
     assert ornament["pl2_per_item"] == 6 and ornament["pl2_est"] == ornament["total_quantity"] * 6
     assert ornament["pl2_plan"] == round(33210 * 2 / 31, 2)
-    assert rows["Quilted"]["page"] is None and rows["Quilted"]["sub_types"] == list(PLAN_PRODUCTS["Quilted"])
+    assert rows["Quilted"]["page"] == "quilted" and rows["Quilted"]["sub_types"] == list(FAMILIES["quilted"].sub_types)
     assert rows["Sticker"]["page"] == "others" and rows["Flag"]["plan"] is None  # a page without a plan line
     assert rows["Other products"]["sub_types"] == ["Crochet", "Digital"]  # Quilted Tote Bag is Quilted's, not left over
 

@@ -1,7 +1,7 @@
 // Product families with their own Etsy page; their product types live in the backend (app/services/families.py).
 // Adding one: an entry here (the route, the Etsy menu item and its Settings › Plan picker follow) and one in the backend.
 import type { Component } from 'vue'
-import { Box, Flag, Grid, Postcard, Present } from '@element-plus/icons-vue'
+import { Box, Flag, Grid, Postcard, Present, ShoppingBag } from '@element-plus/icons-vue'
 import BlanketIcon from '../components/icons/BlanketIcon.vue'
 import ShirtIcon from '../components/icons/ShirtIcon.vue'
 import type { FamilyKey } from './types'
@@ -44,6 +44,16 @@ export const FAMILIES: Record<FamilyKey, Family> = {
     planSheetHint: 'The "KH Blanket" tab, same layout; its Velveteen, Woven and Quilted columns are the product types.',
     accountParts: 'Product type',
     accountsNote: 'a store opens onto its product types. Actual: trackingis, blanket sub product types only.',
+  },
+  quilted: {
+    key: 'quilted', name: 'Quilted', plural: 'quilted goods', icon: ShoppingBag,
+    groupsNote: 'Product types are named as in KH Quilted, each one trackingis sub product type: Quilted Tote Bag, Quilted Laundry '
+      + 'Basket, Quilted Weekend Bag and Quilted Table Runner.',
+    planNote: 'The categories of the plan are the product types of the same name (the sheet\'s "Laudry" and "Weeken" spellings count too).',
+    planSheetHint: 'The "KH Quilted" tab (sheet "Quilted"), same layout as KH Blanket: a "Shop Name | Team" label row, then per month a '
+      + '"Total" column and the 4 categories (Quilted Tote Bag, Laundry Basket, Weekend Bag, Table Runner), in pieces.',
+    accountParts: 'Product type',
+    accountsNote: 'a store opens onto its product types. Actual: trackingis, quilted sub product types only.',
   },
   flag: {
     key: 'flag', name: 'Flag', plural: 'flags', icon: Flag,
