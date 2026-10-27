@@ -100,6 +100,7 @@ export type OverviewLine = {
   total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
   plan?: number | null; plan_month?: number | null; achieved?: number | null // absent without a plan to compare with
   pl2_plan?: number | null; pl2_est?: number | null // PL2 of the plan for the range; quantity × the plan's PL2/item
+  plan_quantity?: number; pl2_achieved?: number | null // the total only: pieces of the products with a plan line (achieved = that / plan); pl2_est / pl2_plan
   fix_quantity?: number // pieces trackingis misses, added by hand (Felt Ornament; already inside total_quantity)
 }
 export type OverviewRow = OverviewLine & {

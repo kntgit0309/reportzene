@@ -67,6 +67,12 @@ def test_overview_rows_follow_the_plan_then_every_other_product(client, member, 
     total = data["total"]
     assert total["plan"] == round((5535 + 1750 + 3250) * 2 / 31, 1) and total["plan_month"] == 5535 + 1750 + 3250
     assert total["pl2_plan"] == round((33210 + 14000 + 17875) * 2 / 31, 2)
+    # the % of plan of All products counts the products the plan has a line for only (not Other products, nor sales without a
+    # sub product type); the PL2 % is PL2 KT / PL2 plan to date
+    planned = sum(r["total_quantity"] for r in data["rows"] if r["plan"] is not None)
+    assert total["plan_quantity"] == planned and planned != total["total_quantity"]
+    assert total["achieved"] == round(planned / ((5535 + 1750 + 3250) * 2 / 31), 4)
+    assert total["pl2_achieved"] == round(total["pl2_est"] / ((33210 + 14000 + 17875) * 2 / 31), 4)
     assert data["plan"]["sheet"]["name"] == "KHKD Quý 4/2026" and data["plan"]["scope"] == "ZenE"
     reports = [r for r in upstream if r.url.path.endswith("/etsy/report")]
     assert len(reports) == 1 + len(data["rows"])  # one query per product and one for all of them

@@ -110,8 +110,10 @@ def etsy_report(ctx: Context, view: str = "date", date_from: str = "", date_to: 
     "Sales by product against the business plan (Etsy › Plan, KHKD \"KH theo Product\"): one row per plan product (Ornament, "
     "Blanket, Shirt, Quilted, Flag, Wooden Block, Badge Reel, Sticker, Scrub cap, Fabric Welcome Sign, Baseball Jersey) plus "
     "Other products (every other trackingis sub product type): total_order, total_quantity, total_revenue, share, plan (pieces for "
-    "the range, months pro rata), plan_month, achieved, pl2_per_item, pl2_plan and pl2_est (quantity × PL2/item). Same filters as "
-    "etsy_totals; the plan is for ZenE as a whole, so it compares only without team / store / seller / designer / keyword filters."))
+    "the range, months pro rata), plan_month, achieved, pl2_per_item, pl2_plan and pl2_est (quantity × PL2/item). The total also has "
+    "plan_quantity (pieces of the products with a plan line; its achieved = plan_quantity / plan) and pl2_achieved (pl2_est / "
+    "pl2_plan). Same filters as etsy_totals; the plan is for ZenE as a whole, so it compares only without team / store / seller / "
+    "designer / keyword filters."))
 def etsy_overview(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
                   teams: str | None = None, keyword: str = "") -> dict:
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
