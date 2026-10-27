@@ -46,7 +46,7 @@ export type Totals = {
 }
 
 /** Product family breakdown (Etsy › Ornament, Shirt, Blanket…): one line per product type, its sub product types as children. */
-export type FamilyKey = 'ornament' | 'shirt' | 'blanket' | 'flag' | 'wooden_block' | 'badge_reel' | 'others'
+export type FamilyKey = 'ornament' | 'shirt' | 'blanket' | 'quilted' | 'flag' | 'wooden_block' | 'badge_reel' | 'others'
 export type FamilyLine = {
   name: string; total_order: number; total_quantity: number; total_revenue: number; total: number; sale_tax: number
   avg_order_value: number; share: number | null

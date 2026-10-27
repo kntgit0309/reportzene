@@ -182,7 +182,7 @@ function exportCsv() {
       takes over (Settings › Plan). Other accounts adds up the stores outside the plans that have a PL2 (KT or CF not 0); All accounts
       is the plans' accounts plus them. PL2 KT = the account's quantity of each plan product × that product's PL2/item, for the
       report's days (pieces added by hand, Felt, are not tied to an account). KH avg/day = the account's plan to date in
-      the KH sheets that plan per store (Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel) ÷ the days. PL2 CF = finance's PROFIT THỰC ĐẠT of the account
+      the KH sheets that plan per store (Ornament, Shirt, Blanket, Quilted, Flag, Wooden Block, Badge Reel) ÷ the days. PL2 CF = finance's PROFIT THỰC ĐẠT of the account
       ("PL Account Etsy_Monthly"), booked per month: the range counts the whole months it touches. CF − KT = PL2 CF − PL2 KT.
       The share charts show each account's part of All accounts' PL2 (accounts at 0 left out); a negative CF is a negative
       share, so the other shares can add up to more than 100%.

@@ -1,8 +1,8 @@
 """Etsy › Report, sales by product vs plan: each product of the business plan (Etsy › Plan, KHKD "KH theo Product") with
 its ZenE sales from trackingis, next to the plan's sales (pieces) and PL2.
 
-A plan product is matched by name: a product family (Ornament, Shirt…: every sub product type of its page), a product type
-of a family (Sticker, Scrub cap… of Others), or one of families.PLAN_PRODUCTS (Quilted: no page of its own yet). "Other
+A plan product is matched by name: a product family (Ornament, Shirt, Quilted…: every sub product type of its page) or a
+product type of a family (Sticker, Scrub cap… of Others). "Other
 products" takes every trackingis sub product type none of them covers. Each row is one trackingis query on its sub product
 types (the report's other filters kept), and the total is one query on all of them: an order holding several products counts
 in each row, so the rows can add up to a little more. Quantity trackingis misses and a family adds by hand (Felt Ornament)
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models import User
 from app.services import family_plan, family_report, plan, report, seller_plan, settings_store
-from app.services.families import FAMILIES, OTHERS, PLAN_PRODUCTS
+from app.services.families import FAMILIES, OTHERS
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
 
 REST = "Other products"
@@ -26,11 +26,9 @@ METRICS = ("total_order", "total_quantity", "total", "sale_tax", "total_revenue"
 
 
 def _catalog() -> dict[str, tuple[str | None, tuple[str, ...]]]:
-    """Product name (lower case) → (page key, sub product types): families first, then PLAN_PRODUCTS (no page; the plan's
-    "Quilted" is the quilted goods, not Blanket's Quilted), then the product types of the families."""
+    """Product name (lower case) → (page key, sub product types): the families first (the plan's "Quilted" is the Quilted
+    page, not Blanket's Quilted type), then the product types of the families."""
     out: dict[str, tuple[str | None, tuple[str, ...]]] = {f.name.lower(): (f.key, f.sub_types) for f in FAMILIES.values()}
-    for name, subs in PLAN_PRODUCTS.items():
-        out.setdefault(name.lower(), (None, subs))
     for f in FAMILIES.values():
         for group, subs in f.groups if len(f.groups) > 1 else ():
             out.setdefault(group.lower(), (f.key, subs))
@@ -38,10 +36,10 @@ def _catalog() -> dict[str, tuple[str | None, tuple[str, ...]]]:
 
 
 def _default_names() -> list[str]:
-    """Every product with a page (Others as its product types) and PLAN_PRODUCTS: the rows when there is no plan, and the
-    rows added after the plan's products for any of them the plan does not list."""
+    """Every product with a page (Others as its product types): the rows when there is no plan, and the rows added after the
+    plan's products for any of them the plan does not list."""
     names = [f.name for f in FAMILIES.values() if f is not OTHERS]
-    return [*names, *PLAN_PRODUCTS, *(group for group, _ in OTHERS.groups)]
+    return [*names, *(group for group, _ in OTHERS.groups)]
 
 
 def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]:
@@ -49,7 +47,7 @@ def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]
     catalog = _catalog()
     out = [{"name": n, "page": catalog.get(n.lower(), (None, ()))[0], "sub_types": list(catalog.get(n.lower(), (None, ()))[1])}
            for n in names]
-    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types} | {s.lower() for subs in PLAN_PRODUCTS.values() for s in subs}
+    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types}
     rest = [s for s in all_sub_types if s.lower() not in listed]
     if rest:
         out.append({"name": REST, "page": OTHERS.key, "sub_types": rest})

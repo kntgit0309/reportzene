@@ -1,4 +1,4 @@
-"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Flag, Wooden Block, Badge Reel, Others): the
+"""Product families with their own Etsy page (Etsy › Ornament, Shirt, Blanket, Quilted, Flag, Wooden Block, Badge Reel, Others): the
 team's grouping of trackingis sub product types into product types, and how the family's plan sheet (KH Ornament, KH Shirt…)
 maps onto it.
 Adding a family: an entry here and in web/src/lib/families.ts; its plan sheet is picked in Settings › Plan."""
@@ -80,6 +80,23 @@ BLANKET = Family(
     plan_note="the plan's Velveteen, Woven and Quilted are the product types of the same name",
 )
 
+# Product types named as in KH Quilted, each sold on trackingis as one sub product type. The sheet's labels are matched in both
+# spellings (the team writes "Laudry" and "Weeken"); a category it does not know goes to "Others" and counts in the total only.
+QUILTED = Family(
+    key="quilted",
+    name="Quilted",
+    groups=(("Quilted Tote Bag", ("Quilted Tote Bag",)), ("Quilted Laundry Basket", ("Quilted Laundry Basket",)),
+            ("Quilted Weekend Bag", ("Quilted Weekend Bag",)), ("Quilted Table Runner", ("Quilted Table Runner",))),
+    plan_groups={"quilted tote bag": "Quilted Tote Bag", "tote bag": "Quilted Tote Bag",
+                 "quilted laundry basket": "Quilted Laundry Basket", "quilted laudry basket": "Quilted Laundry Basket",
+                 "laundry basket": "Quilted Laundry Basket", "laudry basket": "Quilted Laundry Basket",
+                 "quilted weekend bag": "Quilted Weekend Bag", "quilted weeken bag": "Quilted Weekend Bag",
+                 "weekend bag": "Quilted Weekend Bag", "weeken bag": "Quilted Weekend Bag",
+                 "quilted table runner": "Quilted Table Runner", "table runner": "Quilted Table Runner"},
+    plan_other="Others",
+    plan_note="the plan's Quilted Tote Bag, Laundry Basket, Weekend Bag and Table Runner are the product types of the same name",
+)
+
 # One product type, like Shirt; KH Flag has a Total per month and no categories
 FLAG = Family(
     key="flag",
@@ -123,13 +140,7 @@ OTHERS = Family(
     rest_group="Other products",
 )
 
-FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}
-
-# Products of the business plan (Etsy › Plan) without a page of their own yet: a row of Etsy › Report's product overview
-# only (on Etsy › Others their sub product types are still among "Other products")
-PLAN_PRODUCTS: dict[str, tuple[str, ...]] = {
-    "Quilted": ("Quilted Laundry Basket", "Quilted Tote Bag", "Quilted Weekend Bag", "Quilted Table Runner"),
-}
+FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, QUILTED, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}
 
 
 def with_rest(family: Family, all_sub_types: list[str]) -> Family:

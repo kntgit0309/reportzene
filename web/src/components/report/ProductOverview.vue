@@ -179,7 +179,7 @@ function exportCsv() {
     </el-table>
     <div class="mt-2 text-xs text-muted">
       One row per product of the plan (Etsy › Plan), sold as the sub product types of its page — open a product for its details.
-      Quilted is Quilted Laundry Basket, Tote Bag, Weekend Bag and Table Runner (no page of its own yet); Other products is every
+      Quilted is Quilted Tote Bag, Laundry Basket, Weekend Bag and Table Runner; Other products is every
       trackingis sub product type no product covers (no line in the plan: its PL2/item is set in Settings › Plan, $7). An order with several products counts in each row, so the rows can add up to a
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
       includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
