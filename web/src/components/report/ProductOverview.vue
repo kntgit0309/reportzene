@@ -59,7 +59,7 @@ const planKpis = computed(() => {
     { label: 'Plan to date', value: pcs(t?.plan), hint: 'Pieces, months pro rata of the days in the range' },
     { label: 'Actual', value: pcs(t?.total_quantity), hint: t?.fix_quantity ? `Quantity sold, incl. +${num(t.fix_quantity)} added by hand` : 'Quantity sold, every product' },
     { label: 'Gap', value: signedPcs(gap) || '—', color: gapColor(gap), hint: 'Actual − Plan to date' },
-    { label: '% of plan', value: pct(t?.achieved, 0), achieved: t?.achieved, color: barColor(t?.achieved) },
+    { label: '% of PL2 plan', value: pct(t?.pl2_achieved, 0), achieved: t?.pl2_achieved, color: barColor(t?.pl2_achieved), hint: 'PL2 KT (est.) ÷ PL2 plan to date' },
     { label: 'PL2 plan to date', value: money(t?.pl2_plan), hint: `Month plan ${pcs(t?.plan_month)} pcs` },
     { label: 'PL2 KT (est.)', value: money(t?.pl2_est), hint: 'PL2 theo KT: quantity × the plan\'s PL2/item' },
   ]
@@ -106,7 +106,7 @@ function exportCsv() {
         <div class="kpi__label">{{ k.label }}</div>
         <div class="kpi__value" :style="k.color ? { color: k.color } : undefined">{{ k.value }}</div>
         <el-progress v-if="'achieved' in k" :percentage="bar(k.achieved)" :color="barColor(k.achieved)" :show-text="false" :stroke-width="6" class="mt-2" />
-        <div v-else-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
+        <div v-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
       </div>
     </div>
     <div v-if="showPlanChart || (showChart && ktShares.length)" class="mb-3 grid gap-3 xl:grid-cols-5">
@@ -182,7 +182,8 @@ function exportCsv() {
       Quilted is Quilted Tote Bag, Laundry Basket, Weekend Bag and Table Runner; Other products is every
       trackingis sub product type no product covers (no line in the plan: its PL2/item is set in Settings › Plan, $7). An order with several products counts in each row, so the rows can add up to a
       little more than All products; sales without a sub product type in trackingis are only in the headline numbers above. Quantity
-      includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view.
+      includes the pieces a product page adds by hand (Felt Ornament), in the team-wide view. % of PL2 plan = PL2 KT ÷ PL2 plan to date; the
+      % of plan of All products counts the pieces of the products with a plan only (not Other products), as the rows above do.
       <template v-if="hasPlan">The plan is for ZenE as a whole; KH avg/day = plan to date ÷ the days.</template>
       <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above; the share chart
         shows each product's part of All products' PL2 KT.</template>

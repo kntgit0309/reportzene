@@ -142,7 +142,9 @@ def _with_fix(sold: dict[str, Any], pcs: int) -> dict[str, Any]:
 def overview(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{rows: [{name, page, sub_types, …metrics, share, plan, plan_month, achieved, pl2_per_item, pl2_plan, pl2_est}], total,
     plan, query}. Rows follow the plan's products, then Other products; plan fields are absent when the plan does not compare
-    (no plan, or filters below ZenE); pl2_per_item / pl2_est are absent only when there is no plan sheet to read."""
+    (no plan, or filters below ZenE); pl2_per_item / pl2_est are absent only when there is no plan sheet to read.
+    The total's achieved is the pieces of the products the plan has a line for (plan_quantity, not Other products) / plan;
+    pl2_achieved = pl2_est / pl2_plan."""
     q = report.build_query(db, {**params, "view": "date"}, user)
     plan_info = _plan(db, q, user)
     names = plan_info.pop("names", [])
@@ -174,8 +176,11 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     if "error" not in plan_info:
         planned = list(by_name.values())
         plan_pcs = sum(p["plan"] for p in planned)
+        pl2_plan = sum(p["pl2_plan"] for p in planned)
+        plan_quantity = sum(r["total_quantity"] for r in rows if r.get("plan") is not None)  # the products the plan has a line for
         total |= {"plan": round(plan_pcs, 1), "plan_month": round(sum(p["plan_month"] for p in planned)),
-                  "achieved": round(total["total_quantity"] / plan_pcs, 4) if plan_pcs else None,
-                  "pl2_plan": round(sum(p["pl2_plan"] for p in planned), 2)}
+                  "plan_quantity": plan_quantity, "achieved": round(plan_quantity / plan_pcs, 4) if plan_pcs else None,
+                  "pl2_plan": round(pl2_plan, 2),
+                  "pl2_achieved": round(total["pl2_est"] / pl2_plan, 4) if pl2_plan and total.get("pl2_est") is not None else None}
     return {"rows": rows, "total": total, "plan": plan_info,
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
