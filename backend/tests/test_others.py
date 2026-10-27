@@ -7,6 +7,7 @@ from app.models import SheetSource
 from app.services import report, trackingis
 from app.services.families import OTHERS, SHIRT, with_rest
 from app.services.family_plan import parse, plan_for
+from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD "KH theo Product": no line for Others' products)
 from tests.test_report import _save_token
 
 O = "/api/v1/report/etsy/others"
@@ -114,3 +115,14 @@ def test_others_accounts_have_no_store_plan(client, member, upstream, plan_sheet
     [pun] = data["accounts"]
     assert pun["shop"] == "PunGanterdesign" and "plan" not in pun
     assert [c["name"] for c in pun["children"]] == ["Sticker", "Scrub cap", "Fabric Welcome Sign", "Baseball Jersey", "Other products"]
+
+
+def test_others_pl2_est_is_per_product_type_and_other_products_use_settings_rate(client, member, upstream, plan_sheet, business_plan):  # noqa: F811
+    data = client.get(f"{O}?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
+    sticker, *_, rest = data["groups"]
+    assert sticker["pl2_per_item"] is None and sticker["pl2_est"] is None  # KHKD has no line for Sticker
+    assert rest["pl2_per_item"] == 7 and rest["pl2_est"] == rest["total_quantity"] * 7  # Settings › Plan, $7 per item
+    assert [c["pl2_est"] for c in rest["children"]] == [6 * 7, 2 * 7]
+    assert data["total"]["pl2_est"] == rest["pl2_est"] and "pl2_per_item" not in data["total"]  # the product types' own rates added up
+    accounts = client.get(f"{O}/accounts?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
+    assert accounts["accounts"][0]["pl2_est"] == sum(c.get("pl2_est") or 0 for c in accounts["accounts"][0]["children"])

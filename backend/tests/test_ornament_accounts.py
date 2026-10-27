@@ -7,6 +7,7 @@ from app.models import SheetSource
 from app.services import report, trackingis
 from app.services.families import ORNAMENT
 from tests.test_ornament_plan import HEADER, ROWS
+from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD "KH theo Product", Ornament $6/item)
 from tests.test_report import _save_token
 
 A = "/api/v1/report/etsy/ornament/accounts"
@@ -113,3 +114,11 @@ def test_replacing_with_a_store_of_the_plan_adds_the_two_lines_up():
     assert [s["shop"] for s in plan["shops"]] == ["Daisyfloralsshop", "OnebyHenry"]
     assert plan["shops"][0]["replaces"] == ["PunGanterdesign"]
     assert plan_for(plan, "2026-10-01", "2026-10-31", shops={"daisyfloralsshop"})["groups"]["Acrylic + Wood"]["plan"] == 295 + 70
+
+
+def test_accounts_carry_pl2_est_at_the_ornament_rate(client, member, upstream, plan_sheet, business_plan):  # noqa: F811
+    data = client.get(f"{A}?date_from=2026-10-01&date_to=2026-10-31", headers=member).json()["data"]
+    for a in data["accounts"]:
+        assert a["pl2_est"] == a["total_quantity"] * 6
+        assert [c["pl2_est"] for c in a["children"]] == [c["total_quantity"] * 6 for c in a["children"]]
+    assert data["total"]["pl2_est"] == round(sum(a["pl2_est"] for a in data["accounts"]), 2) == data["total"]["total_quantity"] * 6

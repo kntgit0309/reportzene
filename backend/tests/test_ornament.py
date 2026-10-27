@@ -7,6 +7,7 @@ import pytest
 from app.services import trackingis
 from app.services.families import ORNAMENT
 from app.services.family_report import WORKERS
+from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD "KH theo Product", Ornament $6/item)
 from tests.test_report import _save_token
 
 O = "/api/v1/report/etsy/ornament"
@@ -79,3 +80,19 @@ def test_refused_own_token_stops_early_then_is_skipped(client, db_factory, admin
     upstream.clear()
     assert client.get(f"{O}?date_from=2026-10-02&date_to=2026-10-02", headers=member).status_code == 200
     assert len(upstream) == all_queries and all(r.headers["authorization"] == "Bearer tis-token" for r in upstream)
+
+
+def test_ornament_pl2_est_is_quantity_times_the_plans_pl2_per_item(client, member, upstream, business_plan):  # noqa: F811
+    data = client.get(f"{O}?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
+    assert data["total"]["pl2_per_item"] == 6 and data["total"]["pl2_est"] == data["total"]["total_quantity"] * 6  # Felt by hand included
+    for group in data["groups"]:
+        assert group["pl2_per_item"] == 6 and group["pl2_est"] == group["total_quantity"] * 6
+        assert [c["pl2_est"] for c in group["children"]] == [c["total_quantity"] * 6 for c in group["children"]]
+    felt = next(g for g in data["groups"] if g["name"] == "Felt")
+    assert felt["pl2_est"] == (felt["total_quantity"]) * 6 and felt["fix_quantity"] > 0
+
+
+def test_ornament_has_no_pl2_est_without_the_business_plan(client, admin, member, upstream):
+    _save_token(client, admin, teams=["12"])
+    data = client.get(f"{O}?date_from=2026-10-01&date_to=2026-10-02", headers=member).json()["data"]
+    assert "pl2_est" not in data["total"] and all("pl2_est" not in g for g in data["groups"])

@@ -54,6 +54,8 @@ export type FamilyLine = {
   plan?: number // planned pieces for the date range (months pro rata), product types and total only
   plan_month?: number // planned pieces of the whole months the range touches
   achieved?: number | null // total_quantity / plan
+  pl2_per_item?: number | null // product types and the total: the business plan's PL2 per item (none for Others' total)
+  pl2_est?: number | null // PL2 theo KT: quantity × PL2/item; absent without the business plan
 }
 /** Where the family's plan comes from, or why there is none for these filters. */
 export type FamilyPlanInfo = {
@@ -70,7 +72,7 @@ export type FamilyDay = { date_at: string; total_order: number; total_quantity: 
 export type FamilyGroup = FamilyLine & { children: (FamilyLine & { daily?: FamilyDay[] })[]; daily: FamilyDay[] }
 export type FamilyReport = {
   family: { key: FamilyKey; name: string; sub_types: string[] } // every sub product type the page covers
-  total: Omit<Totals, 'date_from' | 'date_to'> & Pick<FamilyLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved'>
+  total: Omit<Totals, 'date_from' | 'date_to'> & Pick<FamilyLine, 'fix_quantity' | 'plan' | 'plan_month' | 'achieved' | 'pl2_per_item' | 'pl2_est'>
   groups: FamilyGroup[]
   fix_note: string | null
   plan: FamilyPlanInfo
@@ -82,6 +84,7 @@ export type FamilyAccountLine = {
   name?: string // product type (sub product type for a single-type family), on the breakdown rows
   total_order: number; total_quantity: number; total: number; sale_tax: number; total_revenue: number; avg_order_value: number
   plan?: number | null; plan_month?: number | null; achieved?: number | null // absent when there is no plan to compare with
+  pl2_est?: number | null // PL2 theo KT: quantity × the business plan's PL2/item; absent without that plan
 }
 export type FamilyAccount = FamilyAccountLine & {
   shop: string; team: string | null; in_plan: boolean; children: FamilyAccountLine[]
