@@ -171,11 +171,14 @@ def _family_tools(family: Family) -> None:
         f"total_revenue, avg_order_value, share of {plural} revenue, and per-day rows. Same filters as etsy_totals; an order "
         f"with several {plural} types counts in each, so use total for the overall numbers. With the KH {name} plan sheet set, "
         f"product types and total also have plan (pieces for the range, months pro rata; {family.plan_note}), plan_month and "
-        "achieved (quantity / plan); `plan` says its scope or why there is none."))
+        "achieved (quantity / plan); `plan` says its scope or why there is none. With the business plan's PL2 per item set "
+        "(etsy_overview), product types, their children and total also have pl2_est (PL2 theo KT = quantity × PL2/item) and "
+        "pl2_per_item."))
     mcp.add_tool(accounts, name=f"etsy_{family.key}_accounts", description=(
         f"{name} sales per store (account) next to the store's line of the KH {name} plan: shop, team, in_plan, total_order, "
-        "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, and children per "
-        f"{children}. Same filters as etsy_{family.key}; stores of the plan first, then stores selling {plural} without a plan line."))
+        "total_quantity, total_revenue, plan (pieces for the range, months pro rata), plan_month, achieved, pl2_est (PL2 theo KT = "
+        f"quantity × the business plan's PL2/item, when set), and children per {children}. Same filters as etsy_{family.key}; "
+        f"stores of the plan first, then stores selling {plural} without a plan line."))
 
 
 for _family in FAMILIES.values():

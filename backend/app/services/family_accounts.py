@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import family_plan, family_report, report, settings_store
+from app.services import family_plan, family_pl2, family_report, report, settings_store
 from app.services.families import Family
 from app.services.trackingis import MAX_PER_PAGE, ReportQuery, TrackingisClient, TrackingisError
 
@@ -83,8 +83,8 @@ def _sum_plan(shop_plans: list[dict[str, Any]]) -> dict[str, float]:
 
 
 def accounts_report(db: Session, family: Family, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
-    """{accounts: [{shop, team, in_plan, …metrics, plan, plan_month, achieved, children: [product type lines]}], total, plan,
-    query}. Stores of the plan come first in sheet order, then stores with sales of the family but no plan line. Children
+    """{accounts: [{shop, team, in_plan, …metrics, plan, plan_month, achieved, pl2_est, children: [product type lines]}], total,
+    plan, query}; pl2_est (PL2 theo KT = quantity × the business plan's PL2/item) is absent without that plan. Stores of the plan come first in sheet order, then stores with sales of the family but no plan line. Children
     are sub product types, without a plan, when the family is a single product type."""
     family = family_report.resolve(db, family, user)
     q = report.build_query(db, {**params, "view": "date"}, user)
@@ -108,6 +108,7 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
         plan_info = {"sheet": family_plan.sheet_info(s["source"]), "scope": s["label"], "months": per_shop["months"],
                      "missing_months": per_shop["missing_months"]}
     has_plan = "error" not in plan_info
+    rates = family_pl2.rates(db, family)  # PL2 theo KT = quantity × the plan's PL2/item, whatever the plan comparison says
     by_group = len(family.groups) > 1  # children are the plan's product types, so they carry their part of the plan
 
     planned = {_key(p["shop"]): p for p in plans}
@@ -123,12 +124,19 @@ def accounts_report(db: Session, family: Family, params: dict[str, Any], user: U
             if row is None and not (gp and gp["plan_month"]):
                 continue
             line = {"name": part, **_metrics(row)}
+            if rates:
+                line["pl2_est"] = family_pl2.est(line["total_quantity"], family_pl2.rate_of(rates, family, part))
             children.append(_with_plan(line, gp or ({"plan": 0.0, "plan_month": 0.0} if p else None)) if has_plan and by_group else line)
         line = {"shop": name, "team": p["team"] if p else None, "in_plan": p is not None, **_metrics(actual.get(key)),
                 "replaces": [old for old, new in replacements if _key(new) == key], "children": children}
+        if rates:  # Others: its product types' own rates added up; otherwise the family's one rate
+            line["pl2_est"] = (round(sum(c.get("pl2_est") or 0 for c in children), 2) if family.rate_by_group
+                               else family_pl2.est(line["total_quantity"], family_pl2.rate_of(rates, family, family.groups[0][0])))
         accounts.append(_with_plan(line, _sum_plan([p]) if p else None) if has_plan else line)
 
     total = _metrics({f: sum(a[f] for a in accounts) for f in METRICS})
+    if rates:
+        total["pl2_est"] = round(sum(a.get("pl2_est") or 0 for a in accounts), 2)
     if has_plan:  # from the unrounded shop plans, so it is the same as the product type table's total
         total = _with_plan(total, _sum_plan(plans))
     return {"accounts": accounts, "total": total, "plan": plan_info,

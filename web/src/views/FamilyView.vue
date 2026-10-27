@@ -79,6 +79,8 @@ const rows = computed<Row[]>(() => (data.value?.groups ?? []).map((g) => ({
   ...g, key: g.name, gap: gapOf(g), children: g.children.map((c) => ({ ...c, key: `${g.name}/${c.name}` })),
 })))
 const total = computed(() => data.value?.total)
+// PL2 theo KT: quantity × the business plan's PL2/item (Etsy › Plan), when it has one for this product
+const hasKt = computed(() => (data.value?.groups ?? []).some((g) => g.pl2_est != null))
 // Avg sales/day: quantity over the calendar days of the range
 const days = computed(() => rangeDays(applied.value.date_from, applied.value.date_to))
 const kpis = computed(() => {
@@ -88,6 +90,8 @@ const kpis = computed(() => {
     { label: 'Total orders', value: t ? num(t.total_order) : '—' },
     { label: 'Quantity', value: t ? num(t.total_quantity) : '—', hint: t?.fix_quantity ? `incl. +${num(t.fix_quantity)} pcs added by hand` : '' },
     { label: 'Avg sales/day', value: t ? perDay(t.total_quantity, days.value) : '—', hint: `pcs a day over ${days.value} days` },
+    ...(hasKt.value ? [{ label: 'PL2 KT (est.)', value: money(t?.pl2_est), note: true,
+      hint: t?.pl2_per_item != null ? `quantity × ${money(t.pl2_per_item)}/item` : 'quantity × each type\'s PL2/item' }] : []),
     { label: 'Avg order value', value: t ? money(t.avg_order_value) : '—' },
     { label: 'Total (incl. tax)', value: t ? money(t.total) : '—' },
     { label: 'Sale tax', value: t ? money(t.sale_tax) : '—' },
@@ -130,7 +134,8 @@ function footer(): string[] {
   const t = total.value
   if (!t) return []
   const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  return [`All ${fam.plural}`, num(t.total_order), quantity(t), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1)]
+  return [`All ${fam.plural}`, num(t.total_order), quantity(t), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value), pct(1),
+    ...(hasKt.value ? [money(t.pl2_est)] : [])]
 }
 /** Quantity with the pieces added by hand shown next to it, e.g. "390 (+170)". */
 const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
@@ -138,13 +143,13 @@ const quantity = (r: { total_quantity: number; fix_quantity?: number }) =>
 
 function exportCsv() {
   const header = ['Product type', 'Sub product type', 'Total order', 'Quantity', 'Quantity added by hand', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan',
-    'Month plan', 'Revenue', 'Avg order value', 'Share']
+    'Month plan', 'Revenue', 'Avg order value', 'Share', 'PL2 KT (est.)']
   const body = rows.value.flatMap((g) => [g, ...(g.children ?? [])].map((r) => [
     g.name, r === g ? '' : r.name, r.total_order, r.total_quantity, r.fix_quantity ?? '', perDayValue(r.total_quantity, days.value),
     perDayValue(r.plan, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap),
     r.achieved ?? '', r.plan_month ?? '',
-    r.total_revenue, r.avg_order_value, r.share ?? '',
+    r.total_revenue, r.avg_order_value, r.share ?? '', r.pl2_est ?? '',
   ]))
   downloadCsv(`${fam.key}-${applied.value.date_from}_${applied.value.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
@@ -162,11 +167,11 @@ function exportCsv() {
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams"
                  :hide="['product_types', 'sub_product_types', 'total_order']" @apply="apply" @reset="reset" />
 
-  <div v-loading="loading" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+  <div v-loading="loading" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" :class="hasKt ? 'xl:grid-cols-8' : 'xl:grid-cols-7'">
     <div v-for="k in kpis" :key="k.label" class="kpi">
       <div class="kpi__label">{{ k.label }}</div>
       <div class="kpi__value">{{ k.value }}</div>
-      <div v-if="k.hint" class="mt-1 text-xs text-amber-600">{{ k.hint }}</div>
+      <div v-if="k.hint" class="mt-1 text-xs" :class="k.note ? 'text-muted' : 'text-amber-600'">{{ k.hint }}</div>
     </div>
   </div>
 
@@ -255,12 +260,23 @@ function exportCsv() {
       <el-table-column label="Share of revenue" prop="share" width="140" align="right">
         <template #default="{ row }"><span class="num">{{ pct(row.share) }}</span></template>
       </el-table-column>
+      <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="pl2_est" width="130" align="right" sortable>
+        <template #default="{ row }">
+          <span class="num font-semibold" :title="row.pl2_per_item != null ? `Quantity × ${money(row.pl2_per_item)}/item` : undefined">
+            {{ row.pl2_est == null ? '' : money(row.pl2_est) }}
+          </span>
+        </template>
+      </el-table-column>
     </el-table>
     <div v-if="data?.fix_note" class="mt-2 text-xs text-amber-600">Quantity {{ data.fix_note }}.</div>
     <div class="mt-2 text-xs text-muted">
       {{ fam.groupsNote }} An order with {{ fam.plural }} of several types counts in each, so the rows can add up to a little more
       than the total.
       <template v-if="hasPlan">Plan: {{ fam.planNote }} Gap = Quantity − Plan to date.</template>
+      <template v-if="hasKt">
+        PL2 KT (est.) = quantity × the PL2/item of the business plan (Etsy › Plan)<template v-if="fam.key === 'others'">: each product type at its
+        own rate, Other products at the rate set in Settings › Plan</template>; Quantity includes the pieces added by hand.
+      </template>
     </div>
   </div>
 

@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.services import families, family_plan, report, settings_store
+from app.services import families, family_plan, family_pl2, report, settings_store
 from app.services.families import Family
 from app.services.trackingis import MAX_PER_PAGE, ReportQuery, TrackingisClient, TrackingisError, summarize
 
@@ -99,8 +99,9 @@ def family_report(db: Session, family: Family, params: dict[str, Any], user: Use
     fix_note, plan, query}.
 
     Rows carrying hand-added quantity (family.quantity_fixes) have `fix_quantity` = the pieces added. With the family's
-    plan sheet (Settings › Plan), product types and the total also carry plan / plan_month / achieved. A family of a single
-    product type also gives its sub product types their `daily` rows (the page's chart then stacks them); the rest group's
+    plan sheet (Settings › Plan), product types and the total also carry plan / plan_month / achieved; with the business
+    plan's PL2 per item (Etsy › Plan), product types, their children and the total carry pl2_est (PL2 theo KT = quantity ×
+    PL2/item). A family of a single product type also gives its sub product types their `daily` rows (the page's chart then stacks them); the rest group's
     children are trackingis product types."""
     family = resolve(db, family, user)
     q = report.build_query(db, {**params, "view": "date"}, user)
@@ -125,6 +126,7 @@ def family_report(db: Session, family: Family, params: dict[str, Any], user: Use
         groups.append({**_line(name, days, group_fix, revenue), "children": children})
     total = {**_plus_quantity(data["total"], sum(n for by_day in fixes.values() for n in by_day.values()))}
     plan = _attach_plan(db, family, q, user, groups, total)
+    _attach_pl2(family, family_pl2.rates(db, family), groups, total)
     return {"family": {"key": family.key, "name": family.name, "sub_types": list(family.sub_types)}, "total": total, "groups": groups,
             "fix_note": family.fix_note if fixes else None, "plan": plan,
             "query": {"date_from": q.date_from, "date_to": q.date_to, "teams": q.lists["teams"]}}
@@ -145,6 +147,23 @@ def _attach_plan(db: Session, family: Family, q: ReportQuery, user: User | None,
     total["plan_month"] = sum(p["plan_month"] for p in by_group.values())
     total["achieved"] = _ratio(total["total_quantity"], total["plan"])
     return plan
+
+
+def _attach_pl2(family: Family, by_type: dict[str, float | None], groups: list[dict[str, Any]], total: dict[str, Any]) -> None:
+    """Add pl2_per_item and pl2_est (PL2 theo KT) to the product types, pl2_est to their children and to the total; nothing
+    without a rate. A family is one product of the plan, one rate for all; Others adds up its product types' own."""
+    if not by_type:
+        return
+    for row in groups:
+        rate = by_type.get(row["name"])
+        row |= {"pl2_per_item": rate, "pl2_est": family_pl2.est(row["total_quantity"], rate)}
+        for child in row["children"]:
+            child["pl2_est"] = family_pl2.est(child["total_quantity"], rate)
+    if family.rate_by_group:  # the rows can add up to a little more than the total: as in the Report's overview
+        total["pl2_est"] = round(sum(g["pl2_est"] or 0 for g in groups), 2)
+    else:
+        rate = family_pl2.rate_of(by_type, family, family.groups[0][0])
+        total |= {"pl2_per_item": rate, "pl2_est": family_pl2.est(total["total_quantity"], rate)}
 
 
 def _ratio(actual: float, plan: float) -> float | None:

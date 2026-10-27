@@ -20,6 +20,8 @@ class Family:
     fix_note: str | None = None
     # Product type taking every trackingis sub product type no family lists (Others); its rows are trackingis product types
     rest_group: str | None = None
+    # The plan prices each product type as a product of its own (Others), not the family as one product (family_pl2)
+    rate_by_group: bool = False
 
     @property
     def sub_types(self) -> tuple[str, ...]:
@@ -138,6 +140,7 @@ OTHERS = Family(
     plan_other="Other products",
     plan_note="KH SP khác plans per product (Sticker, Scrub cap, Fabric Welcome Sign, Baseball Jersey) for ZenE as a whole",
     rest_group="Other products",
+    rate_by_group=True,
 )
 
 FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, QUILTED, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}

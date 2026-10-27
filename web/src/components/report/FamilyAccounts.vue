@@ -17,6 +17,7 @@ const props = defineProps<{
 }>()
 
 const hasPlan = computed(() => !!props.report && !props.report.plan.error)
+const hasKt = computed(() => (props.report?.accounts ?? []).some((a) => a.pl2_est != null)) // PL2 theo KT
 const days = computed(() => rangeDays(props.dateFrom, props.dateTo)) // Avg sales/day
 const rows = computed<Row[]>(() => (props.report?.accounts ?? []).map((a) => ({
   ...a, key: a.shop, label: a.shop, gap: gapOf(a),
@@ -28,17 +29,18 @@ function footer(): string[] {
   const t = props.report?.total
   if (!t) return []
   const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  return ['All accounts', '', num(t.total_order), num(t.total_quantity), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value)]
+  return ['All accounts', '', num(t.total_order), num(t.total_quantity), perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), money(t.avg_order_value),
+    ...(hasKt.value ? [money(t.pl2_est)] : [])]
 }
 
 function exportCsv() {
   const header = ['Account', 'Team', props.family.accountParts, 'In plan', 'Total order', 'Quantity', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan',
     'Month plan',
-    'Revenue', 'Avg order value']
+    'Revenue', 'Avg order value', 'PL2 KT (est.)']
   const body = rows.value.flatMap((a) => [a, ...(a.children ?? [])].map((r) => [
     a.label, a.team ?? '', r === a ? '' : r.label, a.in_plan ? 'yes' : 'no', r.total_order, r.total_quantity,
     perDayValue(r.total_quantity, days.value), perDayValue(r.plan, days.value), r.plan ?? '',
-    r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.avg_order_value,
+    r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.avg_order_value, r.pl2_est ?? '',
   ]))
   downloadCsv(`${props.family.key}-accounts-${props.dateFrom}_${props.dateTo}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
@@ -108,10 +110,14 @@ function exportCsv() {
       <el-table-column label="Avg order value" prop="avg_order_value" width="130" align="right">
         <template #default="{ row }"><span class="num">{{ money(row.avg_order_value) }}</span></template>
       </el-table-column>
+      <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="pl2_est" width="130" align="right" sortable>
+        <template #default="{ row }"><span class="num font-semibold">{{ row.pl2_est == null ? '' : money(row.pl2_est) }}</span></template>
+      </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-muted">
       Plan: each store's row of the plan sheet, matched by store name; {{ family.accountsNote }} A suspended store listed in
       Settings › Plan hands its plan line and its sales to its replacement.
+      <template v-if="hasKt">PL2 KT (est.) = quantity × the PL2/item of the business plan (Etsy › Plan); the pieces added by hand are not tied to a store.</template>
     </div>
   </div>
 </template>

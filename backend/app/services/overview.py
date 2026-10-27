@@ -19,9 +19,9 @@ from app.core.errors import AppError
 from app.models import User
 from app.services import family_plan, family_report, plan, report, seller_plan, settings_store
 from app.services.families import FAMILIES, OTHERS
+from app.services.family_pl2 import REST, with_rest
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
 
-REST = "Other products"
 METRICS = ("total_order", "total_quantity", "total", "sale_tax", "total_revenue", "avg_order_value")
 
 
@@ -54,12 +54,6 @@ def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]
     return out
 
 
-def _with_rest(db: Session, rates: dict[str, Any]) -> dict[str, Any]:
-    """The plan's PL2 per item (product lower case → $), plus Other products' from Settings › Plan when the plan has none."""
-    rate = settings_store.runtime(db).other_pl2_per_item
-    return rates if rate is None or rates.get(REST.lower()) is not None else {**rates, REST.lower(): rate}
-
-
 def priced_products(db: Session, user: User | None) -> list[dict[str, Any]]:
     """[{name, page, sub_types, rate}]: the plan's products with a PL2 per item and sub product types, the basis of PL2 theo KT;
     [] without a readable plan."""
@@ -67,7 +61,7 @@ def priced_products(db: Session, user: User | None) -> list[dict[str, Any]]:
         sheet_plan = plan.by_product(db)
     except AppError:
         return []
-    rates = _with_rest(db, {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]})
+    rates = with_rest(db, {p["product"].lower(): p["pl2_per_item"] for p in sheet_plan["products"]})
     lines = products([p["product"] for p in sheet_plan["products"]], [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
     return [{**line, "rate": rates[line["name"].lower()]} for line in lines if rates.get(line["name"].lower()) is not None and line["sub_types"]]
 
@@ -152,7 +146,7 @@ def overview(db: Session, params: dict[str, Any], user: User | None = None) -> d
     by_name = plan_info.pop("products", {})
     per_item = plan_info.pop("per_item", {})
     if per_item:  # with a plan, Other products count at their PL2 per item too
-        per_item = _with_rest(db, per_item)
+        per_item = with_rest(db, per_item)
     lines = products(names, [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
     data = report._call(db, user, report._key("overview", q), report.CACHE_TTL_S, lambda c: _fetch(c, lines, q))
 
