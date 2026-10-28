@@ -28,9 +28,10 @@ export function signedPcs(v: number | null | undefined): string {
   return (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n))
 }
 
-/** PL2 KT (est.) minus the PL2 plan to date as shown (to the cent), so the gap is exactly the difference of the two cells. */
+/** PL2 KT (est.) minus the PL2 plan to date as shown (to the cent), so the gap is exactly the difference of the two cells.
+ * A product the plan has no line for (Other products) has a plan of $0: its gap is its whole PL2 KT. */
 export function pl2GapOf(r: { pl2_est?: number | null; pl2_plan?: number | null }): number | undefined {
-  return r.pl2_est == null || r.pl2_plan == null ? undefined : Math.round((r.pl2_est - r.pl2_plan) * 100) / 100
+  return r.pl2_est == null ? undefined : Math.round((r.pl2_est - (r.pl2_plan ?? 0)) * 100) / 100
 }
 
 /** "+$1,234.50", "-$12.00"; empty without a value. */

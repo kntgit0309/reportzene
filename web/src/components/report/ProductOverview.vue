@@ -194,8 +194,8 @@ function exportCsv() {
       % of plan of All products counts the pieces of the products with a plan only (not Other products), as the rows above do.
       <template v-if="hasPlan">The plan is for ZenE as a whole; KH avg/day = plan to date ÷ the days.</template>
       <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above; the share chart
-        shows each product's part of All products' PL2 KT. PL2 gap = PL2 KT (est.) − PL2 plan to date (Other products, which the plan has
-        no line for, are in All products' PL2 KT).</template>
+        shows each product's part of All products' PL2 KT. PL2 gap = PL2 KT (est.) − PL2 plan to date; Other products has no line in the plan,
+        so its gap is its whole PL2 KT, and the rows add up to All products.</template>
     </div>
   </div>
 </template>
