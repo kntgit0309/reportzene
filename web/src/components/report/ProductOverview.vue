@@ -6,11 +6,11 @@ import FamilyPlanChart from './FamilyPlanChart.vue'
 import ShareBarChart from './ShareBarChart.vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num, pct } from '../../lib/format'
-import { bar, barColor, gapClass, gapColor, gapOf, KT_COLOR, pcs, perDay, perDayValue, rangeDays, signedPcs } from '../../lib/plan'
+import { bar, barColor, gapClass, gapColor, gapOf, KT_COLOR, pcs, perDay, perDayValue, pl2GapOf, rangeDays, signedMoney, signedPcs } from '../../lib/plan'
 import { downloadCsv, fetchOverview } from '../../lib/report'
 import type { Overview, OverviewRow } from '../../lib/types'
 
-type Row = OverviewRow & { gap?: number }
+type Row = OverviewRow & { gap?: number; pl2_gap?: number }
 
 // Etsy › Report: every product of the business plan (Etsy › Plan) with its sales, for the report's filters
 const props = defineProps<{ params: Record<string, string> }>()
@@ -39,7 +39,7 @@ const plan = computed(() => data.value?.plan)
 const hasPlan = computed(() => !!plan.value && !plan.value.error)
 const days = computed(() => rangeDays(props.params.date_from, props.params.date_to)) // Avg sales/day
 const hasKt = computed(() => (data.value?.rows ?? []).some((r) => r.pl2_per_item != null)) // PL2 theo KT, for any filters
-const rows = computed<Row[]>(() => (data.value?.rows ?? []).map((r) => ({ ...r, gap: gapOf(r) })))
+const rows = computed<Row[]>(() => (data.value?.rows ?? []).map((r) => ({ ...r, gap: gapOf(r), pl2_gap: pl2GapOf(r) })))
 const chartRows = computed(() => rows.value.filter((r) => r.plan || r.total_quantity))
 const ktShares = computed(() => rows.value.filter((r) => r.pl2_est).map((r) => ({ name: r.name, value: r.pl2_est as number }))) // PL2 KT share
 const showPlanChart = computed(() => showChart.value && hasPlan.value && chartRows.value.length > 0)
@@ -55,6 +55,7 @@ const planSource = computed(() => {
 const planKpis = computed(() => {
   const t = total.value
   const gap = t ? gapOf(t) : undefined
+  const pl2Gap = t ? pl2GapOf(t) : undefined
   return [
     { label: 'Plan to date', value: pcs(t?.plan), hint: 'Pieces, months pro rata of the days in the range' },
     { label: 'Actual', value: pcs(t?.total_quantity), hint: t?.fix_quantity ? `Quantity sold, incl. +${num(t.fix_quantity)} added by hand` : 'Quantity sold, every product' },
@@ -62,6 +63,7 @@ const planKpis = computed(() => {
     { label: '% of PL2 plan', value: pct(t?.pl2_achieved, 0), achieved: t?.pl2_achieved, color: barColor(t?.pl2_achieved), hint: 'PL2 KT (est.) ÷ PL2 plan to date' },
     { label: 'PL2 plan to date', value: money(t?.pl2_plan), hint: `Month plan ${pcs(t?.plan_month)} pcs` },
     { label: 'PL2 KT (est.)', value: money(t?.pl2_est), hint: 'PL2 theo KT: quantity × the plan\'s PL2/item' },
+    { label: 'PL2 gap', value: signedMoney(pl2Gap) || '—', color: gapColor(pl2Gap), hint: 'PL2 KT (est.) − PL2 plan to date' },
   ]
 })
 
@@ -69,18 +71,19 @@ function footer(): string[] {
   const t = total.value
   if (!t) return []
   const planCells = hasPlan.value ? [perDay(t.plan, days.value), pcs(t.plan), signedPcs(gapOf(t)), pct(t.achieved, 0), pcs(t.plan_month)] : []
-  const pl2Cells = [...(hasKt.value ? [''] : []), ...(hasPlan.value ? [money(t.pl2_plan)] : []), ...(hasKt.value ? [money(t.pl2_est)] : [])]
+  const pl2Cells = [...(hasKt.value ? [''] : []), ...(hasPlan.value ? [money(t.pl2_plan)] : []), ...(hasKt.value ? [money(t.pl2_est)] : []),
+    ...(hasPlan.value && hasKt.value ? [signedMoney(pl2GapOf(t))] : [])]
   const quantity = num(t.total_quantity) + (t.fix_quantity ? ` (+${num(t.fix_quantity)})` : '')
   return ['All products', num(t.total_order), quantity, perDay(t.total_quantity, days.value), ...planCells, money(t.total_revenue), pct(1), ...pl2Cells]
 }
 
 function exportCsv() {
   const header = ['Product', 'Sub product types', 'Total order', 'Quantity', 'Avg sales/day', 'KH avg/day', 'Plan to date', 'Gap', '% of plan', 'Month plan', 'Revenue',
-    'Share', 'PL2/item', 'PL2 plan to date', 'PL2 KT (est.)']
+    'Share', 'PL2/item', 'PL2 plan to date', 'PL2 KT (est.)', 'PL2 gap']
   const body = rows.value.map((r) => [r.name, r.sub_types.join(' | '), r.total_order, r.total_quantity, perDayValue(r.total_quantity, days.value),
     perDayValue(r.plan, days.value), r.plan ?? '',
     r.gap == null ? '' : Math.round(r.gap), r.achieved ?? '', r.plan_month ?? '', r.total_revenue, r.share ?? '', r.pl2_per_item ?? '',
-    r.pl2_plan ?? '', r.pl2_est ?? ''])
+    r.pl2_plan ?? '', r.pl2_est ?? '', r.pl2_gap ?? ''])
   downloadCsv(`products-vs-plan-${props.params.date_from}_${props.params.date_to}.csv`, header, body)
   ElMessage.success(`Exported ${body.length} rows`)
 }
@@ -101,7 +104,7 @@ function exportCsv() {
       <RouterLink v-if="auth.isAdmin.value && plan?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
     </el-alert>
 
-    <div v-if="hasPlan" v-loading="loading" class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div v-if="hasPlan" v-loading="loading" class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
       <div v-for="k in planKpis" :key="k.label" class="kpi">
         <div class="kpi__label">{{ k.label }}</div>
         <div class="kpi__value" :style="k.color ? { color: k.color } : undefined">{{ k.value }}</div>
@@ -176,6 +179,11 @@ function exportCsv() {
       <el-table-column v-if="hasKt" label="PL2 KT (est.)" prop="pl2_est" width="110" align="right" sortable>
         <template #default="{ row }"><span class="num font-semibold">{{ row.pl2_est == null ? '' : money(row.pl2_est) }}</span></template>
       </el-table-column>
+      <el-table-column v-if="hasPlan && hasKt" label="PL2 gap" prop="pl2_gap" width="115" align="right" sortable>
+        <template #default="{ row }">
+          <span class="num font-semibold" :class="gapClass(row.pl2_gap)" title="PL2 KT (est.) − PL2 plan to date">{{ signedMoney(row.pl2_gap) }}</span>
+        </template>
+      </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-muted">
       One row per product of the plan (Etsy › Plan), sold as the sub product types of its page — open a product for its details.
@@ -186,7 +194,8 @@ function exportCsv() {
       % of plan of All products counts the pieces of the products with a plan only (not Other products), as the rows above do.
       <template v-if="hasPlan">The plan is for ZenE as a whole; KH avg/day = plan to date ÷ the days.</template>
       <template v-if="hasKt">PL2 KT (PL2 theo KT) = quantity × the plan's PL2/item; compared with finance's PL2 (CF) in PL2: KT vs CF above; the share chart
-        shows each product's part of All products' PL2 KT.</template>
+        shows each product's part of All products' PL2 KT. PL2 gap = PL2 KT (est.) − PL2 plan to date (Other products, which the plan has
+        no line for, are in All products' PL2 KT).</template>
     </div>
   </div>
 </template>
