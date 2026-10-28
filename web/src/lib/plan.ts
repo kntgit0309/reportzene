@@ -1,6 +1,6 @@
 // Plan vs actual (Etsy › Ornament, Etsy › Shirt): pieces, gap, % of plan bars — shared by the product type and account tables.
 import { h, type VNode } from 'vue'
-import { num } from './format'
+import { money, num } from './format'
 
 /** Calendar days of a date range, both ends included: 2026-10-01 → 2026-10-19 is 19 days. */
 export function rangeDays(from: string, to: string): number {
@@ -27,6 +27,14 @@ export function signedPcs(v: number | null | undefined): string {
   const n = Math.round(v)
   return (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n))
 }
+
+/** PL2 KT (est.) minus the PL2 plan to date as shown (to the cent), so the gap is exactly the difference of the two cells. */
+export function pl2GapOf(r: { pl2_est?: number | null; pl2_plan?: number | null }): number | undefined {
+  return r.pl2_est == null || r.pl2_plan == null ? undefined : Math.round((r.pl2_est - r.pl2_plan) * 100) / 100
+}
+
+/** "+$1,234.50", "-$12.00"; empty without a value. */
+export const signedMoney = (v: number | null | undefined) => (v == null ? '' : (v > 0 ? '+' : '') + money(v))
 
 export const gapClass = (v: number | null | undefined) => (v == null || Math.round(v) === 0 ? '' : v < 0 ? 'text-red-600' : 'text-green-600')
 /** The same as a colour, where a utility class would lose to a component style (KPI values). */

@@ -2,14 +2,13 @@
 import { computed, onMounted, ref, watch, type VNode } from 'vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, pct } from '../../lib/format'
-import { bar, barColor, cfColor, cfTotal, gapColor } from '../../lib/plan'
+import { bar, barColor, cfColor, cfTotal, gapColor, signedMoney } from '../../lib/plan'
 import { fetchPl2 } from '../../lib/report'
 import type { Pl2Month, Pl2Report } from '../../lib/types'
 
 type Row = Partial<Pl2Month> & { key: string; label: string; children?: Row[] }
 
 // Etsy › Report: finance's monthly PL2 (PL2 theo CF) next to the PL2 estimated from sales (PL2 theo KT), for the report's filters
-const signedMoney = (v: number | null | undefined) => (v == null ? '' : (v > 0 ? '+' : '') + money(v))
 const props = defineProps<{ params: Record<string, string> }>()
 const data = ref<Pl2Report | null>(null)
 const loading = ref(false)
