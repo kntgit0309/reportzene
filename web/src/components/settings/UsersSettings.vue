@@ -7,11 +7,11 @@ import { auth } from '../../lib/auth'
 import { fetchOptions } from '../../lib/report'
 import type { Option, Role, User } from '../../lib/types'
 
-type Form = { email: string; name: string; code: string; role: Role; password: string; scope_sellers: string[] }
+type Form = { email: string; name: string; code: string; role: Role; password: string; scope_sellers: string[]; can_view_as: boolean }
 const users = ref<User[]>([])
 const dialog = ref(false)
 const editing = ref<User | null>(null)
-const form = ref<Form>({ email: '', name: '', code: '', role: 'member', password: '', scope_sellers: [] })
+const form = ref<Form>({ email: '', name: '', code: '', role: 'member', password: '', scope_sellers: [], can_view_as: false })
 const saving = ref(false)
 const sellers = ref<Option[]>([]) // trackingis sellers, for a member's data scope
 const sellerName = computed(() => new Map(sellers.value.map((s) => [String(s.id), s.name])))
@@ -28,20 +28,20 @@ onMounted(async () => {
 
 function openNew() {
   editing.value = null
-  form.value = { email: '', name: '', code: '', role: 'member', password: '', scope_sellers: [] }
+  form.value = { email: '', name: '', code: '', role: 'member', password: '', scope_sellers: [], can_view_as: false }
   dialog.value = true
 }
 function openEdit(u: User) {
   editing.value = u
-  form.value = { email: u.email, name: u.name, code: u.code, role: u.role, password: '', scope_sellers: [...(u.scope_sellers ?? [])] }
+  form.value = { email: u.email, name: u.name, code: u.code, role: u.role, password: '', scope_sellers: [...(u.scope_sellers ?? [])], can_view_as: !!u.can_view_as }
   dialog.value = true
 }
 async function save() {
   saving.value = true
   try {
     if (editing.value) {
-      const { name, code, role, password, scope_sellers } = form.value
-      await api.patch(`/users/${editing.value.id}`, { name, code, role, scope_sellers, ...(password ? { password } : {}) })
+      const { name, code, role, password, scope_sellers, can_view_as } = form.value
+      await api.patch(`/users/${editing.value.id}`, { name, code, role, scope_sellers, can_view_as, ...(password ? { password } : {}) })
     } else {
       const { password, ...rest } = form.value
       await api.post('/users', password ? form.value : rest)
@@ -78,6 +78,9 @@ async function toggleActive(u: User) {
     <el-table-column label="Code" prop="code" width="100" />
     <el-table-column label="Role" width="140"><template #default="{ row }">{{ row.role === 'admin' ? 'Admin' : 'Member' }}</template></el-table-column>
     <el-table-column label="Sees" min-width="180"><template #default="{ row }"><span class="text-xs">{{ sees(row as User) }}</span></template></el-table-column>
+    <el-table-column label="View as" width="95">
+      <template #default="{ row }"><span class="text-xs">{{ row.role === 'admin' ? 'Always' : row.can_view_as ? 'Allowed' : '' }}</span></template>
+    </el-table-column>
     <el-table-column label="Status" width="110"><template #default="{ row }"><el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? 'Active' : 'Locked' }}</el-tag></template></el-table-column>
     <el-table-column width="170" align="right">
       <template #default="{ row }">
@@ -102,6 +105,10 @@ async function toggleActive(u: User) {
           <el-option v-for="s in sellers" :key="s.id" :label="s.name" :value="String(s.id)" />
         </el-select>
         <div class="text-xs text-muted">Pick the member's own seller (trackingis) to show them only their sales; leave empty for the whole of ZenE.</div>
+      </el-form-item>
+      <el-form-item v-if="form.role === 'member'" label="View as sellers">
+        <el-switch v-model="form.can_view_as" active-text="May view as a seller account (read-only)" />
+        <div class="text-xs text-muted">Shows the "View as seller" switch: they see ReportZenE exactly as the seller account does, and can change nothing in its name. Admins always can.</div>
       </el-form-item>
       <el-form-item :label="editing ? 'New password (leave blank to keep the current one)' : 'Password (leave blank = Isuccess System sign-in only)'">
         <el-input v-model="form.password" type="password" show-password autocomplete="new-password" />

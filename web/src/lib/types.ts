@@ -1,6 +1,12 @@
 export type Role = 'member' | 'admin'
 export type User = { id: number; email: string; name: string; code: string; role: Role; is_active: boolean; avatar_url: string | null; is_pod: boolean
-  scope_sellers: string[] } // trackingis seller ids a member sees only (their own sales); [] = the whole of ZenE
+  scope_sellers: string[] // trackingis seller ids a member sees only (their own sales); [] = the whole of ZenE
+  can_view_as?: boolean // an admin lets this member view as a seller account (Settings › Users)
+  may_view_as?: boolean // /auth/me: the signed-in user may view as a seller (admins always)
+  viewed_by?: { id: number; name: string } } // /auth/me: set while this account is viewed as by someone else
+
+/** A seller account the signed-in user may view as (View as). */
+export type ViewAsOption = { id: number; name: string; code: string; scope_sellers: string[] }
 
 export type View = 'date' | 'order' | 'product' | 'store' | 'seller' | 'product_type'
 

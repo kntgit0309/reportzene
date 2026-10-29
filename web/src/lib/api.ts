@@ -10,8 +10,19 @@ export class ApiError extends Error {
   }
 }
 
+// "View as": the id of the seller account the app is viewed as, kept for this tab only and sent on every request
+const VIEW_AS_KEY = 'rzn.view_as'
+export function viewAsId(): string | null {
+  try { return sessionStorage.getItem(VIEW_AS_KEY) } catch { return null }
+}
+export function setViewAsId(id: number | null): void {
+  try { if (id == null) sessionStorage.removeItem(VIEW_AS_KEY); else sessionStorage.setItem(VIEW_AS_KEY, String(id)) } catch { /* private window */ }
+}
+
 export async function request<T>(method: string, path: string, body?: unknown): Promise<Envelope<T>> {
   const headers: Record<string, string> = {}
+  const viewing = viewAsId()
+  if (viewing) headers['X-View-As'] = viewing
   let payload: BodyInit | undefined
   if (body instanceof FormData) payload = body
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body) }

@@ -48,7 +48,7 @@ def list_users(request: Request, db: Session = Depends(get_db), _: User = Depend
 @router.post("")
 def create_user(body: UserCreate, request: Request, db: Session = Depends(get_db), _: User = Depends(admin)) -> dict[str, Any]:
     user = User(email=body.email.strip().lower(), name=body.name.strip(), code=_code(body.code), role=body.role, password_hash=hash_password(body.password) if body.password else NO_PASSWORD,
-                scope_sellers=_scope(body.scope_sellers))
+                scope_sellers=_scope(body.scope_sellers), can_view_as=body.can_view_as)
     db.add(user)
     _commit(db)
     return ok(user_out(user), request, "User created")
@@ -68,6 +68,8 @@ def update_user(user_id: int, body: UserUpdate, request: Request, db: Session = 
         user.code = _code(body.code)
     if body.scope_sellers is not None:
         user.scope_sellers = _scope(body.scope_sellers)
+    if body.can_view_as is not None:
+        user.can_view_as = body.can_view_as
     if body.password:
         user.password_hash = hash_password(body.password)
     if body.password or body.is_active is False:

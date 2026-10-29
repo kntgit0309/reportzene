@@ -2,9 +2,12 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Aim, DataLine, Document, Expand, Fold, Setting } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import AgentTokens from '../components/AgentTokens.vue'
+import { api } from '../lib/api'
 import { auth } from '../lib/auth'
 import { FAMILY_LIST } from '../lib/families'
+import type { ViewAsOption } from '../lib/types'
 
 const MOBILE_PX = 768
 const route = useRoute()
@@ -12,6 +15,16 @@ const router = useRouter()
 const collapsed = ref(window.innerWidth < MOBILE_PX)
 const user = computed(() => auth.state.user)
 const tokensOpen = ref(false)
+
+// View as: see ReportZenE as a seller account does (their sales, their menu), read-only; for admins and members an admin allowed
+const viewAsOpen = ref(false)
+const viewAsList = ref<ViewAsOption[]>([])
+const viewAsPick = ref<number | null>(null)
+async function openViewAs() {
+  viewAsPick.value = null
+  viewAsOpen.value = true
+  try { viewAsList.value = (await api.get<ViewAsOption[]>('/auth/view-as')).data } catch (e) { ElMessage.error((e as Error).message) }
+}
 
 // Same grouping as the trackingis sidebar: a small group title, then its pages
 const GROUPS = [
@@ -59,7 +72,15 @@ async function logout() {
 
     <div class="flex min-h-full min-w-0 flex-1 flex-col transition-all"
          :style="{ marginLeft: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)' }">
-      <header class="sticky top-0 z-10 flex h-[var(--header-height)] items-center justify-between border-b border-[#e2e8f0] bg-white/90 px-4 backdrop-blur">
+      <div class="sticky top-0 z-10">
+      <div v-if="auth.viewedBy.value" class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
+        <span>Viewing as <b>{{ user?.name }}</b>: what they see, read-only. You are signed in as {{ auth.viewedBy.value.name }}.</span>
+        <span class="flex gap-2">
+          <el-button size="small" @click="openViewAs">Switch</el-button>
+          <el-button size="small" type="primary" @click="auth.viewAs(null)">Exit</el-button>
+        </span>
+      </div>
+      <header class="flex h-[var(--header-height)] items-center justify-between border-b border-[#e2e8f0] bg-white/90 px-4 backdrop-blur">
         <el-button text circle aria-label="Collapse menu" @click="collapsed = !collapsed"><el-icon :size="18"><component :is="collapsed ? Expand : Fold" /></el-icon></el-button>
         <el-dropdown trigger="click">
           <div class="flex cursor-pointer items-center gap-2">
@@ -72,15 +93,27 @@ async function logout() {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item disabled>{{ user?.email }}</el-dropdown-item>
+              <el-dropdown-item v-if="auth.mayViewAs.value" @click="openViewAs">View as seller…</el-dropdown-item>
               <el-dropdown-item @click="tokensOpen = true">Agent tokens (MCP)</el-dropdown-item>
               <el-dropdown-item divided @click="logout">Sign out</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
       </header>
+      </div>
       <!-- keyed by path: Etsy › Ornament, Shirt, Blanket… are one page component, each path gets its own page -->
       <main class="flex-1 px-4 py-5 sm:px-6"><RouterView :key="route.path" /></main>
       <AgentTokens v-model="tokensOpen" />
+      <el-dialog v-model="viewAsOpen" title="View as seller" width="min(440px, 92vw)">
+        <p class="mt-0 text-sm text-slate-500">See ReportZenE exactly as this seller account does: their sales, their menu, read-only. Exit from the bar at the top.</p>
+        <el-select v-model="viewAsPick" filterable placeholder="Pick a seller account" class="w-full" no-data-text="No seller account yet: set Sees for a member in Settings › Users">
+          <el-option v-for="o in viewAsList" :key="o.id" :label="`${o.name} (${o.code})`" :value="o.id" />
+        </el-select>
+        <template #footer>
+          <el-button @click="viewAsOpen = false">Close</el-button>
+          <el-button type="primary" :disabled="viewAsPick == null" @click="viewAsPick != null && auth.viewAs(viewAsPick)">View</el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>

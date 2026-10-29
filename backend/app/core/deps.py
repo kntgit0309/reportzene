@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core.errors import AppError, forbidden
+from app.core.errors import AppError, forbidden, not_found, validation
 from app.core.security import token_hash
 from app.db import get_db
 from app.models import ApiToken, User, UserSession
@@ -44,8 +44,43 @@ def user_from_token(db: Session, token: str | None) -> User:
     return user
 
 
-def current_user(token: str | None = Depends(session_token), db: Session = Depends(get_db)) -> User:
+VIEW_AS_HEADER = "x-view-as"
+
+
+def real_user(token: str | None = Depends(session_token), db: Session = Depends(get_db)) -> User:
+    """Who is signed in, whatever account they are viewing as."""
     return user_from_token(db, token)
+
+
+def view_as_target(db: Session, token: str | None, user: User, method: str, raw: str) -> User:
+    """The seller account `user` is viewing as ("View as" on the header X-View-As = its user id), or an error.
+
+    Only a signed-in browser session may (not an agent token), only a user an admin allowed (admins always), only to a
+    seller account (an active member limited to some sellers), and read-only: every report, filter and sheet is then
+    exactly what that seller gets, and nothing can be changed in their name."""
+    if not user.may_view_as:
+        raise forbidden("Your account cannot view as another account")
+    if token is None or db.get(UserSession, token_hash(token)) is None:
+        raise forbidden("View as needs a browser session, not an agent token")
+    if not raw.isdigit():
+        raise validation("X-View-As is the id of a seller account")
+    if int(raw) == user.id:
+        return user
+    target = db.get(User, int(raw))
+    if target is None or not target.is_active:
+        raise not_found("seller account")
+    if target.is_admin or target.seller_scope is None:
+        raise forbidden("You can only view as a seller account (a member limited to some sellers)")
+    if method not in ("GET", "HEAD"):
+        raise forbidden(f"Read-only while viewing as {target.name}: exit View as to change anything")
+    return target
+
+
+def current_user(request: Request, token: str | None = Depends(session_token), db: Session = Depends(get_db)) -> User:
+    """The user every request acts as: the signed-in one, or the seller account they view as."""
+    user = user_from_token(db, token)
+    raw = request.headers.get(VIEW_AS_HEADER)
+    return view_as_target(db, token, user, request.method, raw.strip()) if raw and raw.strip() else user
 
 
 def full_access(user: User = Depends(current_user)) -> User:
