@@ -28,10 +28,16 @@ class User(Base):
     pod_token_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Data scope set by an admin: the trackingis seller ids whose sales this member sees; None / [] = the whole of ZenE
     scope_sellers: Mapped[list[str] | None] = mapped_column(JSON)
+    # An admin lets this member "view as" a seller account (read-only); admins always can. NULL (older rows) = no
+    can_view_as: Mapped[bool | None] = mapped_column(Boolean, default=False)
 
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def may_view_as(self) -> bool:
+        return self.is_admin or bool(self.can_view_as)
 
     @property
     def seller_scope(self) -> list[str] | None:

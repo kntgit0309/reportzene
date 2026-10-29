@@ -14,8 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core.deps import current_user, session_token
-from app.core.errors import AppError
+from app.core.deps import current_user, real_user, session_token
+from app.core.errors import AppError, forbidden
 from app.core.responses import ok
 from app.core.security import new_token, token_hash, verify_password
 from app.db import get_db
@@ -41,7 +41,9 @@ def user_out(u: User) -> dict[str, Any]:
     return {"id": u.id, "email": u.email, "name": u.name, "code": u.code, "role": u.role, "is_active": u.is_active,
             "avatar_url": u.avatar_url, "is_pod": u.pod_user_id is not None, "pod_connected": bool(u.pod_token),
             "pod_token_at": u.pod_token_at.isoformat() if u.pod_token_at else None,
-            "scope_sellers": [str(s) for s in u.scope_sellers or []]}  # data scope (Settings › Users); [] = the whole of ZenE
+            "scope_sellers": [str(s) for s in u.scope_sellers or []],  # data scope (Settings › Users); [] = the whole of ZenE
+            "can_view_as": bool(u.can_view_as),  # an admin lets them view as a seller account (Settings › Users)
+            "may_view_as": u.may_view_as}  # they may (admins always); /auth/me gives the signed-in user's, whoever they view as
 
 
 def _start_session(db: Session, user: User, response: Response) -> None:
@@ -159,5 +161,20 @@ def logout(request: Request, response: Response, token: str | None = Depends(ses
 
 
 @router.get("/me")
-def me(request: Request, user: User = Depends(current_user)) -> dict[str, Any]:
-    return ok(user_out(user), request)
+def me(request: Request, user: User = Depends(current_user), real: User = Depends(real_user)) -> dict[str, Any]:
+    """The account the app acts as; `may_view_as` is the signed-in user's own right, `viewed_by` who is viewing as it."""
+    out = user_out(user) | {"may_view_as": real.may_view_as}
+    if real.id != user.id:
+        out["viewed_by"] = {"id": real.id, "name": real.name}
+        log.info("View as: %s sees ReportZenE as %s", real.email, user.email)
+    return ok(out, request)
+
+
+@router.get("/view-as")
+def view_as_options(request: Request, user: User = Depends(real_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """The seller accounts the signed-in user may view as: active members limited to some sellers."""
+    if not user.may_view_as:
+        raise forbidden("Your account cannot view as another account")
+    rows = db.scalars(select(User).where(User.is_active.is_(True), User.id != user.id).order_by(User.name))
+    return ok([{"id": u.id, "name": u.name, "code": u.code, "scope_sellers": u.seller_scope} for u in rows if u.seller_scope is not None],
+              request)
