@@ -8,7 +8,7 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, report
+from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, pl2_sellers, report
 from app.services.families import FAMILIES
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
@@ -56,6 +56,12 @@ def pl2_kt_vs_cf(request: Request, db: Session = Depends(get_db), user: User = D
 def pl2_per_account(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """PL2 per account: PL2 theo KT (quantity × PL2/item) next to finance's PROFIT THỰC ĐẠT (PL2 theo CF) of each account."""
     return ok(pl2_accounts.pl2_accounts(db, _params(request), user), request)
+
+
+@router.get("/pl2/sellers")
+def pl2_per_seller(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """PL2 per seller: PL2 theo KT (quantity × PL2/item) next to the seller's PL2 plan to date and finance's PL2 theo CF."""
+    return ok(pl2_sellers.pl2_sellers(db, _params(request), user), request)
 
 
 @router.get("/{family}")

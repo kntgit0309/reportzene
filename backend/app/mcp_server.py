@@ -15,7 +15,7 @@ from app.core.deps import user_from_token
 from app.core.errors import AppError
 from app.db import SessionLocal
 from app.models import User
-from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, report, sheets
+from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, pl2_sellers, report, sheets
 from app.services.families import FAMILIES, Family
 
 MAX_ROWS = 200
@@ -143,6 +143,19 @@ def etsy_pl2_accounts(ctx: Context, date_from: str = "", date_to: str = "", shop
     params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
                       keyword=keyword)
     return _run(ctx, lambda db, u: pl2_accounts.pl2_accounts(db, params, u))
+
+
+@mcp.tool(description=(
+    "PL2 per seller: each seller with quantity, kt (PL2 theo KT = their quantity of each plan product × that product's PL2/item), "
+    "plan (their PL2 plan to date, pro rata of the days, from the seller plan sheet), cf (finance's \"Profit tính KPI\" of the "
+    "seller, the months the range touches), kt_gap (KT − plan), cf_gap (CF − plan), kt_pct / cf_pct (as a share of the plan) and "
+    "cf_minus_kt. The plan's sellers come first, then sellers outside it with a PL2 (their whole PL2 is the gap). Same filters as "
+    "etsy_totals; a seller filter keeps those sellers' rows; store / team / designer / keyword filters leave plan and CF out."))
+def etsy_pl2_sellers(ctx: Context, date_from: str = "", date_to: str = "", shops: str = "", sellers: str = "", designers: str = "",
+                     teams: str | None = None, keyword: str = "") -> dict:
+    params = _filters(date_from=date_from, date_to=date_to, shops=shops, sellers=sellers, designers=designers, teams=teams,
+                      keyword=keyword)
+    return _run(ctx, lambda db, u: pl2_sellers.pl2_sellers(db, params, u))
 
 
 def _family_tools(family: Family) -> None:
