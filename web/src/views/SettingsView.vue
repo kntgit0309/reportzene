@@ -16,6 +16,7 @@ type Status = {
   sheet_sync_last?: { day?: string; started_at?: string; finished_at?: string; synced?: number; failed?: number }
   plan_sheet_id: number | null; plan_start_column: number; plan_products: number; pl2_cf_sheet_id: number | null
   pl2_account_sheet_id: number | null; account_list_sheet_id: number | null // PL2 per account (Etsy › Report)
+  account_plan_sheet_id: number | null // "KH theo Acc": each account's PL2 plan per month, on the KT and the CF basis
   seller_plan_sheet_id: number | null // "KH quý 4.2026 theo seller": a seller's share of ZenE's PL2 plan per month
   seller_cf_sheets: number[] // "1.2 P&L Seller (Sau IP)_Monthly" of each team: a seller's PL2 theo CF
   other_pl2_per_item: number | null // PL2/item of Other products ($) for PL2 KT; KHKD has no line for them
@@ -29,7 +30,8 @@ const status = ref<Status | null>(null)
 const form = reactive({ trackingis_token: '', default_teams: [] as number[], lark_app_id: '', lark_app_secret: '', sheet_sync_at: '10:00',
   plan_sheet_id: null as number | null | undefined, plan_start_column: 17 as number | undefined, plan_products: 11 as number | undefined,
   pl2_cf_sheet_id: null as number | null | undefined, pl2_account_sheet_id: null as number | null | undefined,
-  account_list_sheet_id: null as number | null | undefined, other_pl2_per_item: 7 as number | undefined,
+  account_list_sheet_id: null as number | null | undefined, account_plan_sheet_id: null as number | null | undefined,
+  other_pl2_per_item: 7 as number | undefined,
   seller_plan_sheet_id: null as number | null | undefined, seller_cf_sheets: [] as number[],
   family_plan_sheets: {} as Partial<Record<FamilyKey, number | null>>, account_replacements: [] as AccountReplacement[] })
 const teams = ref<Option[]>([])
@@ -45,6 +47,7 @@ function fill(s: Status) {
     default_teams: s.default_teams.map(Number),
     plan_sheet_id: s.plan_sheet_id, plan_start_column: s.plan_start_column, plan_products: s.plan_products,
     pl2_cf_sheet_id: s.pl2_cf_sheet_id, pl2_account_sheet_id: s.pl2_account_sheet_id, account_list_sheet_id: s.account_list_sheet_id,
+    account_plan_sheet_id: s.account_plan_sheet_id,
     seller_plan_sheet_id: s.seller_plan_sheet_id, seller_cf_sheets: [...(s.seller_cf_sheets ?? [])],
     other_pl2_per_item: s.other_pl2_per_item ?? 0,
     family_plan_sheets: { ...s.family_plan_sheets }, account_replacements: s.account_replacements.map((r) => ({ ...r })) })
@@ -74,7 +77,8 @@ async function save() {
   try {
     const res = await api.put<Status>('/settings', { ...form, default_teams: form.default_teams.map(String), plan_sheet_id: form.plan_sheet_id ?? 0,
       pl2_cf_sheet_id: form.pl2_cf_sheet_id ?? 0, pl2_account_sheet_id: form.pl2_account_sheet_id ?? 0,
-      account_list_sheet_id: form.account_list_sheet_id ?? 0, seller_plan_sheet_id: form.seller_plan_sheet_id ?? 0,
+      account_list_sheet_id: form.account_list_sheet_id ?? 0, account_plan_sheet_id: form.account_plan_sheet_id ?? 0,
+      seller_plan_sheet_id: form.seller_plan_sheet_id ?? 0,
       seller_cf_sheets: form.seller_cf_sheets.map(String),
       other_pl2_per_item: form.other_pl2_per_item ?? 0, sheet_sync_at: form.sheet_sync_at || '', // cleared = no daily sync
       family_plan_sheets: Object.fromEntries(FAMILY_LIST.map((f) => [f.key, form.family_plan_sheets[f.key] ?? 0])),
@@ -174,6 +178,16 @@ async function save() {
             <div class="text-xs text-muted">
               "Acc đã bàn giao Seller" (Shop Name and Team columns): the PL2 account sheet names its rows with a QUERY over this list,
               which Lark does not return, so the k-th row of a team is the team's k-th account here.
+            </div>
+          </el-form-item>
+          <el-form-item label="Account PL2 plan sheet (KH theo Acc: PL2 plan per account)">
+            <el-select v-model="form.account_plan_sheet_id" clearable placeholder="No account PL2 plan sheet" class="w-full">
+              <el-option v-for="s in sheets" :key="s.id" :label="`${s.name} · ${s.tab_title}`" :value="s.id" />
+            </el-select>
+            <div class="text-xs text-muted">
+              The KHKD tab "KH theo Acc", added to Team sheets with header row 1: the blocks "PL2 theo KT" and "PL2 theo CF" (months
+              MM-YYYY under each label, then one row per account with its Shop Name and Team). PL2 by account (Etsy › Report) shows
+              each account's plan to date, pro rata of the days, next to its PL2 KT and CF, with the gap.
             </div>
           </el-form-item>
           <el-form-item label="Seller plan sheet (report filtered by seller)">
