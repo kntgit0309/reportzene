@@ -18,13 +18,14 @@ def test_unlisted_ornament_sub_types_count_in_others():
     assert len(every) == len(set(every))  # each sub product type in one product type only: nothing counted twice
 
 
-def test_felt_fix_is_170_pieces_over_01_to_18_october_then_130_over_19_to_22_122_over_23_to_27_and_75_over_28_to_31():
+def test_felt_fix_is_170_pieces_over_01_to_18_october_then_130_over_19_to_22_122_over_23_to_27_75_over_28_to_31_and_100_over_01_to_03_november():
     first = {d: n for d, n in FELT.items() if d <= "2026-10-18"}
     assert sum(first.values()) == 170 and len(first) == 18 and min(first) == "2026-10-01" and set(first.values()) == {9, 10}
     assert [FELT[f"2026-10-{d}"] for d in (19, 20, 21, 22)] == [33, 33, 32, 32]  # 130 split evenly
     assert [FELT[f"2026-10-{d}"] for d in (23, 24, 25, 26, 27)] == [25, 25, 24, 24, 24]  # 122 split evenly
     assert [FELT[f"2026-10-{d}"] for d in (28, 29, 30, 31)] == [19, 19, 19, 18]  # 75 split evenly
-    assert sum(FELT.values()) == 497 and max(FELT) == "2026-10-31"
+    assert [FELT[f"2026-11-0{d}"] for d in (1, 2, 3)] == [34, 33, 33]  # 100 split evenly
+    assert sum(FELT.values()) == 597 and max(FELT) == "2026-11-03"
 
 
 def test_team_wide_view_adds_the_missing_felt_pieces(client, admin, member, upstream):  # noqa: F811
@@ -48,6 +49,6 @@ def test_team_wide_view_adds_the_missing_felt_pieces(client, admin, member, upst
 def test_fix_left_out_when_narrowed_or_outside_its_days(client, admin, member, upstream):  # noqa: F811
     _save_token(client, admin, teams=["12"])
     for query in ("date_from=2026-10-01&date_to=2026-10-02&shops=5", "date_from=2026-10-01&date_to=2026-10-02&teams=13",
-                  "date_from=2026-11-01&date_to=2026-11-02"):
+                  "date_from=2026-11-04&date_to=2026-11-05"):
         data = client.get(f"{O}?{query}", headers=member).json()["data"]
         assert data["fix_note"] is None and "fix_quantity" not in data["total"], query
