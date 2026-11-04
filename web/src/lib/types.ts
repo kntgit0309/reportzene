@@ -143,6 +143,9 @@ export type Pl2Report = {
 export type Pl2AccountLine = {
   shop: string; team: string | null; quantity: number; kt: number | null; cf: number | null; cf_minus_kt: number | null
   plan?: number | null // KH plan to date (pieces) of the account, over the KH sheets planning per store
+  // PL2 plan to date on the KT and on the CF basis ("KH theo Acc"), and KT / CF against it
+  kt_plan?: number | null; kt_gap?: number | null; kt_pct?: number | null
+  cf_plan?: number | null; cf_gap?: number | null; cf_pct?: number | null
 }
 type SheetRef = { id: number; name: string; tab_title: string; last_synced_at: string | null }
 export type Pl2Accounts = {
@@ -151,6 +154,7 @@ export type Pl2Accounts = {
   total: Pl2AccountLine
   kt: { error?: string }
   cf: { error?: string; sheet?: SheetRef; list?: SheetRef; months?: string[]; warnings?: string[] }
+  kh_pl2?: { error?: string; sheet?: SheetRef; months?: { kt: string[]; cf: string[] }; missing?: string[] } // the "KH theo Acc" plan
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
