@@ -154,6 +154,22 @@ export type Pl2Accounts = {
   query: { date_from: string; date_to: string; teams: string[] }
 }
 
+/** PL2 per seller: PL2 theo KT, the seller's PL2 plan to date and finance's "Profit tính KPI" (PL2 theo CF); null = not available */
+export type Pl2SellerLine = {
+  seller: string; sellers: string[] // the name in the sheets, and the trackingis seller(s) on that row
+  in_plan: boolean; quantity: number
+  plan: number | null; kt: number | null; cf: number | null
+  kt_gap: number | null; kt_pct: number | null; cf_gap: number | null; cf_pct: number | null; cf_minus_kt: number | null
+}
+export type Pl2Sellers = {
+  sellers: Pl2SellerLine[] // the plan's sellers in sheet order, then the sellers outside it that have a PL2
+  total: Pl2SellerLine
+  kt: { error?: string }
+  plan: { error?: string; sheet?: SheetRef; months?: string[]; missing?: string[] }
+  cf: { error?: string; sheets?: SheetRef[]; months?: string[]; missing?: string[] }
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+
 export type Option = { id: number | string; name: string; parent_id?: number | null; type?: string }
 
 export type Filters = {

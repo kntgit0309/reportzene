@@ -57,9 +57,9 @@ def _rows(table: dict[str, dict[str, Any]], names: list[str]) -> list[dict[str, 
     return out
 
 
-def lines(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
-    """{source, line: {plan: {MM-YYYY: $}, actual: {MM-YYYY: $}}, label, months} for the sellers of the report's filter, or
-    {"error"}: actual = their "Profit tính KPI" (seller CF sheets), plan = their PL2 plan (seller plan sheet, when set)."""
+def table(db: Session) -> dict[str, Any]:
+    """{sellers: {name key: {name, actual: {MM-YYYY: PL2}}}, sources: [SheetSource]} read from the seller CF sheets of
+    Settings › Plan (a seller of two teams keeps the first row found), or {"error"}."""
     rt = settings_store.runtime(db)
     sources = [s for s in (db.get(SheetSource, i) for i in rt.seller_cf_sheets) if s is not None]
     if not sources:
@@ -73,6 +73,17 @@ def lines(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
                 sellers.setdefault(key, row)
         except AppError as exc:
             return {"error": f'"{source.name}": {exc.message}'}
+    return {"sellers": sellers, "sources": sources}
+
+
+def lines(db: Session, q: ReportQuery, user: User | None) -> dict[str, Any]:
+    """{source, line: {plan: {MM-YYYY: $}, actual: {MM-YYYY: $}}, label, months} for the sellers of the report's filter, or
+    {"error"}: actual = their "Profit tính KPI" (seller CF sheets), plan = their PL2 plan (seller plan sheet, when set)."""
+    rt = settings_store.runtime(db)
+    got = table(db)
+    if "error" in got:
+        return got
+    sellers, sources = got["sellers"], got["sources"]
     names = {str(o["id"]): str(o["name"]) for o in report.filter_options(db, "sellers", user)}
     picked = [names.get(s, s) for s in q.lists["sellers"]]
     found = _rows(sellers, picked)

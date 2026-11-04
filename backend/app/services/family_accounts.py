@@ -21,10 +21,11 @@ MAX_PAGES = 5  # 200 stores per page
 METRICS = ("total_order", "total_quantity", "total", "sale_tax", "total_revenue")
 
 
-def _stores(client: TrackingisClient, q: ReportQuery) -> list[dict[str, Any]]:
+def _stores(client: TrackingisClient, q: ReportQuery, view: str = "store") -> list[dict[str, Any]]:
+    """Every row of the store view (or another view, e.g. "seller") for the query, paged through."""
     rows: list[dict[str, Any]] = []
     for page in range(1, MAX_PAGES + 1):
-        got = client.report(replace(q, view="store", page=page, per_page=MAX_PER_PAGE, sort_by="total_revenue", sort_order="desc"))
+        got = client.report(replace(q, view=view, page=page, per_page=MAX_PER_PAGE, sort_by="total_revenue", sort_order="desc"))
         rows += got["rows"]
         if page >= int(got["paging"].get("last_page") or 1):
             break
