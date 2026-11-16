@@ -211,7 +211,8 @@ function exportCsv() {
       CF not 0), with a plan of $0, so their whole PL2 is their gap. PL2 KT = the seller's quantity of each plan product × that
       product's PL2/item, for the report's days (pieces added by hand, Felt, are not tied to a seller). PL2 plan to date = the
       seller plan sheet's PL2 of each month pro rata of the days. PL2 CF = finance's "Profit tính KPI" of the seller (the
-      "1.2 P&amp;L Seller" tabs), booked per month: the range counts the whole months it touches. KT gap = KT − plan, CF gap = CF − plan,
+      "1.2 P&amp;L Seller" tabs of the teams' files, added up for a seller with a row in several files, e.g. Linh in Etsy 2 and
+      Etsy 1), booked per month: the range counts the whole months it touches. KT gap = KT − plan, CF gap = CF − plan,
       KT % and CF % = KT or CF as a share of the plan, CF − KT = PL2 CF − PL2 KT. The sheets name sellers by first name (Linh), trackingis by
       account (Linh PT.ETS): they are matched on the first name. Plan and CF are per seller across all stores, so a store, team, designer
       or keyword filter leaves them out. While the seller plan sheet cannot be read, the plan is the built-in copy of the Q4 2026 plan

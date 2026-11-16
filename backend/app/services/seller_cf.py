@@ -6,6 +6,9 @@ tabs, which Lark's API returns as their first cell only. So ReportZenE reads whe
 "1.2 P&L Seller (Sau IP)_Monthly" of each team's P&L file (Settings › Plan › Seller CF sheets, one team sheet per team): months
 "MM-YYYY" in the header row, then a "Profit tính KPI" section, one row per seller (name in column B), until a row without a
 name. The plan beside it is the seller's PL2 plan in the seller plan sheet (seller_plan).
+
+A seller can have a row in several teams' files (Linh, Châu, An, Trang and Dung in Etsy 2 and Etsy 1; Vy and Vân in Etsy 3 and
+Etsy 1; Huyền, Thuỷ, Phương, Uyển and Nga in Etsy 1 only): their PL2 theo CF is the sum of their rows, month by month.
 """
 from typing import Any
 
@@ -59,7 +62,7 @@ def _rows(table: dict[str, dict[str, Any]], names: list[str]) -> list[dict[str, 
 
 def table(db: Session) -> dict[str, Any]:
     """{sellers: {name key: {name, actual: {MM-YYYY: PL2}}}, sources: [SheetSource]} read from the seller CF sheets of
-    Settings › Plan (a seller of two teams keeps the first row found), or {"error"}."""
+    Settings › Plan (a seller with a row in several teams' files: the months of their rows added up), or {"error"}."""
     rt = settings_store.runtime(db)
     sources = [s for s in (db.get(SheetSource, i) for i in rt.seller_cf_sheets) if s is not None]
     if not sources:
@@ -70,7 +73,9 @@ def table(db: Session) -> dict[str, Any]:
             return {"error": f'"{source.name}" has not been synced yet: sync it in Lark › Team sheets'}
         try:
             for key, row in parse(source.header or [], source.rows).items():
-                sellers.setdefault(key, row)
+                have = sellers.setdefault(key, {"name": row["name"], "actual": {}})
+                for month, value in row["actual"].items():  # a seller of several teams: their rows are added up
+                    have["actual"][month] = have["actual"].get(month, 0.0) + value
         except AppError as exc:
             return {"error": f'"{source.name}": {exc.message}'}
     return {"sellers": sellers, "sources": sources}
