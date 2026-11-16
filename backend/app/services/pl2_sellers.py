@@ -7,6 +7,8 @@ Seller CF sheets), booked per month, so a range counts the whole months it touch
 ("Linh"), trackingis by account ("Linh PT.ETS"): they are matched as in seller_plan (`match`), and two trackingis sellers
 that fall on one sheet row are one row here. The sellers of the plan sheet come first, in sheet order; sellers outside it
 are listed after them when they have a PL2 (KT or CF not 0), and their whole PL2 counts as gap against a plan of $0.
+While the seller plan sheet cannot be read (not picked, or no "PL2 T10" label row in its snapshot) the built-in copy of the Q4
+plan (seller_plan.BUILT_IN) stands in for it, and the response says why; the sheet is used again as soon as it can be read.
 
 Plan and CF are per seller across all stores and teams: a store, team, designer or keyword filter narrows the KT only, so they
 are left out then. A seller filter keeps those sellers' rows (a member limited to their own sales gets only theirs). Pieces
@@ -39,14 +41,17 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
 
 
 def _plan_table(db: Session, names: list[str]) -> dict[str, Any]:
-    """{table, sheet} of the seller plan sheet (the table where most of `names` have a row), or {"error"}."""
+    """{table, sheet} of the seller plan sheet (the table where most of `names` have a row); while the sheet cannot be read,
+    {table, built_in: True, reason} with the built-in Q4 plan and why the sheet is not used."""
     got = _sheet(db, settings_store.runtime(db).seller_plan_sheet_id, "seller plan sheet")
-    if isinstance(got, str):
-        return {"error": got}
-    try:
-        tables = seller_plan.parse(got.header or [], got.rows)
-    except AppError as exc:
-        return {"error": exc.message}
+    reason = got if isinstance(got, str) else ""
+    if not reason:
+        try:
+            tables = seller_plan.parse(got.header or [], got.rows)
+        except AppError as exc:
+            reason = exc.message
+    if reason:
+        return {"table": seller_plan.built_in(), "built_in": True, "reason": reason}
     return {"table": seller_plan.best(tables, names)[0], "sheet": family_plan.sheet_info(got)}
 
 
@@ -75,7 +80,8 @@ def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: flo
 def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{sellers: [{seller, sellers, in_plan, quantity, plan, kt, cf, kt_gap, kt_pct, cf_gap, cf_pct, cf_minus_kt}], total, kt,
     plan, cf, query}; plan = PL2 plan to date ($), kt_gap = kt − plan, cf_gap = cf − plan; kt / plan / cf = {"error"} when
-    not available (a field of a row is then None)."""
+    not available (a field of a row is then None); plan = {built_in: True, reason, months, missing} while the built-in copy of
+    the Q4 plan stands in for the sheet, else {sheet, months, missing}."""
     q = report.build_query(db, {**params, "view": "date"}, user)
     rt = settings_store.runtime(db)
     options = {str(o["id"]): str(o["name"]) for o in report.filter_options(db, "sellers", user)}
@@ -143,7 +149,8 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
     total_plan = add("plan")
     total = _line("All sellers", [], False, sum(r["quantity"] for r in out), total_plan, add("kt"), add("cf"), total_plan if has_plan else None)
     plan_info = plan if "error" in plan else {
-        "sheet": plan["sheet"], "months": [f"T{m}" for m in planned], "missing": [m for m in months if int(m[:2]) not in planned]}
+        **({"built_in": True, "reason": plan["reason"]} if plan.get("built_in") else {"sheet": plan["sheet"]}),
+        "months": [f"T{m}" for m in planned], "missing": [m for m in months if int(m[:2]) not in planned]}
     cf_info = cf if "error" in cf else {
         "sheets": [family_plan.sheet_info(s) for s in cf["sources"]],
         "months": sorted({m for row in cf_rows.values() for m in row["actual"]}, key=lambda m: (m[3:], m[:2])),

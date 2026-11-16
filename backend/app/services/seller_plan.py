@@ -23,6 +23,26 @@ from app.services.trackingis import ReportQuery
 LABEL = re.compile(r"^pl2\s*t(\d{1,2})(\s*\(\d+\))?$", re.IGNORECASE)  # "PL2 T10", or "PL2 T10 (2)" as a repeated header
 
 
+# The seller plan of Q4 2026 ("KH quý 4.2026 theo seller", columns H–P of the sheet: names, Quý IV, PL2 T10 | T11 | T12 in
+# dollars, then the same labels as shares), copied from the user's screenshot of 2026-11-16. Mai has no figures there. It stands
+# in for the sheet in PL2 by seller while the sheet cannot be read (not picked in Settings › Plan, or its snapshot has no label
+# row); the sheet is used as soon as it can be read. Sheet totals: T10 $64,798, T11 $209,331, T12 $170,917.
+BUILT_IN_MONTHS = (10, 11, 12)
+BUILT_IN: dict[str, tuple[int, int, int]] = {
+    "Huyền": (9149, 25598, 21000), "Thuỷ": (9607, 28198, 23123), "Phương": (4061, 10457, 8698), "Uyển": (7902, 22862, 18843),
+    "Nga": (7304, 20673, 16842), "Vân": (0, 11240, 3332), "Vy": (0, 7856, 2444), "Linh": (8938, 25150, 23357),
+    "An": (8121, 25621, 23629), "Châu": (4498, 15658, 14562), "Trang": (3737, 11123, 10439), "Dung": (1481, 4895, 4649),
+}
+
+
+def built_in() -> dict[str, Any]:
+    """The built-in plan as a table of `parse` (no share columns: a seller's share of a month is their PL2 / the total)."""
+    sellers = {name_key(name): {"name": name, "pl2": {m: float(v) for m, v in zip(BUILT_IN_MONTHS, pl2, strict=True)}, "share": {}}
+               for name, pl2 in BUILT_IN.items()}
+    return {"months": list(BUILT_IN_MONTHS), "sellers": sellers,
+            "total": {m: sum(r["pl2"][m] for r in sellers.values()) for m in BUILT_IN_MONTHS}}
+
+
 def name_key(name: Any) -> str:
     """"Thuỷ NT.ETS" → "thuy": the first word, lower case, without accents (the sheet writes first names only)."""
     text = str(name or "").replace("đ", "d").replace("Đ", "D")

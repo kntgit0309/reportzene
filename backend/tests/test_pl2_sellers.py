@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from app.models import SheetSource
-from app.services import report, trackingis
+from app.services import report, seller_plan, trackingis
 from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD with Ornament $6, Blanket $8, Shirt $5.5 PL2/item)
 from tests.test_seller_cf import HEADER as CF_HEADER  # "1.2 P&L Seller (Sau IP)_Monthly": Anh NTM, Linh PT, AN NTT
 from tests.test_seller_cf import ROWS as CF_ROWS
@@ -108,10 +108,52 @@ def test_filters_that_cut_across_stores_leave_plan_and_cf_out(client, member, up
     assert data["sellers"][0]["kt"] == 10 * KT_PER_PIECE and data["total"]["plan"] is None
 
 
-def test_without_the_seller_sheets_it_still_shows_kt(client, member, upstream, business_plan, sellers):  # noqa: F811
+def test_without_the_seller_sheets_it_shows_kt_against_the_built_in_plan(client, member, upstream, business_plan, sellers):  # noqa: F811
     data = client.get(S, headers=member).json()["data"]
-    assert "seller plan sheet" in data["plan"]["error"] and "seller CF sheets" in data["cf"]["error"]
-    assert [r["seller"] for r in data["sellers"]] == ["Linh PT.ETS", "Huyền HTN.ETS", "Khoa NT"] and data["total"]["kt"] == 17 * KT_PER_PIECE
+    assert "seller CF sheets" in data["cf"]["error"]
+    # no seller plan sheet: the built-in copy of the Q4 plan stands in, and says why
+    assert data["plan"]["built_in"] is True and "seller plan sheet" in data["plan"]["reason"] and "error" not in data["plan"]
+    assert data["plan"]["months"] == ["T10", "T11", "T12"] and data["plan"]["missing"] == [] and "sheet" not in data["plan"]
+    # the plan's sellers in the sheet's order (Mai has no figures), then the trackingis sellers outside it with a PL2
+    assert [r["seller"] for r in data["sellers"]] == [*seller_plan.BUILT_IN, "Khoa NT"]
+    rows = {r["seller"]: r for r in data["sellers"]}
+    assert rows["Linh"]["sellers"] == ["Linh PT.ETS"] and rows["Linh"]["plan"] == round(8938 * TO_DATE, 2)  # Linh's T10 of the sheet
+    assert rows["Linh"]["kt"] == 10 * KT_PER_PIECE and rows["Huyền"]["kt"] == 4 * KT_PER_PIECE and rows["Thuỷ"]["kt"] == 0
+    assert rows["Khoa NT"]["plan"] is None and rows["Khoa NT"]["kt_gap"] == rows["Khoa NT"]["kt"]
+    assert data["total"]["kt"] == 17 * KT_PER_PIECE
+    assert data["total"]["plan"] == round(sum(r["plan"] for r in data["sellers"] if r["plan"] is not None), 2)
+
+
+def test_a_seller_plan_sheet_without_its_label_row_falls_back_too(client, db_factory, admin, member, upstream, business_plan, sellers):  # noqa: F811
+    # imported with a Header row below the "PL2 T10 | T11 | T12" labels: the labels are not in the snapshot
+    header = ["Column 1", "$445,045", "$64,798", "$209,331", "$170,917"]
+    rows = [dict(zip(header, r, strict=True)) for r in (["Huyền", "$55,747", "$9,149", "$25,598", "$21,000"], ["Linh", "$57,445", "8,938", "25,150", "23,357"])]
+    with db_factory() as s:
+        sheet = SheetSource(name="KH quý 4.2026 theo seller", url="https://x.larksuite.com/sheets/AbCdEfGhIjKl", tab_title="KH PL2_Seller",
+                            header=header, rows=rows, row_count=len(rows))
+        s.add(sheet)
+        s.commit()
+    client.put("/api/v1/settings", json={"seller_plan_sheet_id": sheet.id}, headers=admin)
+    plan = client.get(S, headers=member).json()["data"]["plan"]
+    assert plan["built_in"] is True and "label row" in plan["reason"]
+
+
+def test_the_sheet_is_used_again_when_it_can_be_read(client, member, upstream, business_plan, seller_sheet, sellers):  # noqa: F811
+    plan = client.get(S, headers=member).json()["data"]["plan"]
+    assert "built_in" not in plan and plan["sheet"]["name"] == "KH quý 4.2026 theo seller"
+
+
+def test_the_built_in_plan_matches_the_figures_it_was_copied_from():
+    # the sheet's own totals (T10, T11, T12) and each seller's "Quý IV", as read from the screenshot of 2026-11-16
+    table = seller_plan.built_in()
+    assert table["months"] == [10, 11, 12]
+    assert [round(table["total"][m]) for m in (10, 11, 12)] == [64798, 209331, 170918]  # the sheet shows 170,917: its cells have cents
+    quarter = {"Huyền": 55747, "Thuỷ": 60928, "Phương": 23216, "Uyển": 49607, "Nga": 44819, "Vân": 14572, "Vy": 10300, "Linh": 57445,
+               "An": 57371, "Châu": 34717, "Trang": 25299, "Dung": 11025}
+    assert list(quarter) == list(seller_plan.BUILT_IN)
+    for name, q4 in quarter.items():
+        assert abs(sum(seller_plan.BUILT_IN[name]) - q4) <= 1, name  # within the rounding of the sheet's cells
+    assert seller_plan.match(table["sellers"], "Thùy NT.ETS")["name"] == "Thuỷ"  # trackingis spells it Thùy
 
 
 def test_a_seller_filter_keeps_their_rows_only_and_a_member_limited_to_their_sales_sees_nothing_else(
