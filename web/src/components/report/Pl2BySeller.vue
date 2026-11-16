@@ -61,6 +61,7 @@ const source = computed(() => {
   if (!d) return ''
   const parts: string[] = []
   if (d.plan.sheet) parts.push(`Plan: ${d.plan.sheet.name.trim()} · ${d.plan.sheet.tab_title.trim()} · synced ${dateTime(d.plan.sheet.last_synced_at)}`)
+  else if (d.plan.built_in) parts.push('Plan: built-in copy of "KH quý 4.2026 theo seller" (PL2 T10–T12)')
   if (d.cf.sheets?.length) {
     const latest = d.cf.sheets.map((s) => s.last_synced_at).filter(Boolean).sort().at(-1) ?? null
     parts.push(`CF: Profit tính KPI ${touched(d.cf.months).join(', ') || '—'} · ${d.cf.sheets.length} seller P&L tab(s) · synced ${dateTime(latest)}`)
@@ -127,6 +128,11 @@ function exportCsv() {
       <el-alert v-if="data.kt.error" type="info" :closable="false" show-icon :title="data.kt.error" class="!my-3" />
       <el-alert v-if="data.plan.error && !auth.ownSalesOnly.value" type="info" :closable="false" show-icon :title="data.plan.error" class="!my-3">
         <RouterLink v-if="auth.isAdmin.value && data.plan.error.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
+      </el-alert>
+      <el-alert v-if="data.plan.built_in && !auth.ownSalesOnly.value" type="warning" :closable="false" show-icon class="!my-3"
+                title="The seller plan sheet cannot be read, so the built-in copy of the Q4 2026 plan (PL2 T10–T12) is used. It follows the sheet as soon as the sheet can be read.">
+        <div class="text-xs">{{ data.plan.reason }}</div>
+        <RouterLink v-if="auth.isAdmin.value" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
       </el-alert>
       <el-alert v-if="data.cf.error && data.cf.error !== data.plan.error && !auth.ownSalesOnly.value" type="info" :closable="false" show-icon
                 :title="data.cf.error" class="!my-3">
@@ -208,7 +214,8 @@ function exportCsv() {
       "1.2 P&amp;L Seller" tabs), booked per month: the range counts the whole months it touches. KT gap = KT − plan, CF gap = CF − plan,
       KT % and CF % = KT or CF as a share of the plan, CF − KT = PL2 CF − PL2 KT. The sheets name sellers by first name (Linh), trackingis by
       account (Linh PT.ETS): they are matched on the first name. Plan and CF are per seller across all stores, so a store, team, designer
-      or keyword filter leaves them out.
+      or keyword filter leaves them out. While the seller plan sheet cannot be read, the plan is the built-in copy of the Q4 2026 plan
+      (T10–T12, copied from "KH quý 4.2026 theo seller"); the sheet takes over as soon as it can be read.
     </div>
   </div>
 </template>

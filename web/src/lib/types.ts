@@ -169,7 +169,8 @@ export type Pl2Sellers = {
   sellers: Pl2SellerLine[] // the plan's sellers in sheet order, then the sellers outside it that have a PL2
   total: Pl2SellerLine
   kt: { error?: string }
-  plan: { error?: string; sheet?: SheetRef; months?: string[]; missing?: string[] }
+  // built_in: the built-in copy of the Q4 seller plan stands in for the sheet, which cannot be read for `reason`
+  plan: { error?: string; sheet?: SheetRef; built_in?: boolean; reason?: string; months?: string[]; missing?: string[] }
   cf: { error?: string; sheets?: SheetRef[]; months?: string[]; missing?: string[] }
   query: { date_from: string; date_to: string; teams: string[] }
 }
