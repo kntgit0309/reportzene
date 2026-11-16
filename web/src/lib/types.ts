@@ -159,10 +159,16 @@ export type Pl2Accounts = {
 }
 
 /** PL2 per seller: PL2 theo KT, the seller's PL2 plan to date and finance's "Profit tính KPI" (PL2 theo CF); null = not available */
+/** A seller's PL2 in one month (MM-YYYY): the month's plan, the plan to date over the range's days, KT, pieces and CF; null = not in the range */
+export type Pl2SellerMonth = {
+  month: string; plan: number | null; plan_to_date: number | null; quantity: number | null; kt: number | null; cf: number | null
+}
 export type Pl2SellerLine = {
   seller: string; sellers: string[] // the name in the sheets, and the trackingis seller(s) on that row
   in_plan: boolean; quantity: number
   plan: number | null; kt: number | null; cf: number | null
+  plan_total: number | null // the plan's months added up (KH quý)
+  months: Pl2SellerMonth[]
   kt_gap: number | null; kt_pct: number | null; cf_gap: number | null; cf_pct: number | null; cf_minus_kt: number | null
 }
 export type Pl2Sellers = {

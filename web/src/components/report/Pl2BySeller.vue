@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch, type VNode } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import SellerCards from './SellerCards.vue'
 import ShareBarChart from './ShareBarChart.vue'
 import { auth } from '../../lib/auth'
 import { dateTime, money, num, pct } from '../../lib/format'
@@ -148,6 +149,8 @@ function exportCsv() {
         <div v-if="k.hint" class="mt-1 text-xs text-muted">{{ k.hint }}</div>
       </div>
     </div>
+
+    <SellerCards v-if="data" :data="data" />
 
     <div v-if="showChart && (ktShares.length || cfShares.length)" class="mb-3 grid gap-3 lg:grid-cols-2">
       <ShareBarChart v-if="ktShares.length" title="PL2 KT share by seller" value-label="PL2 KT (est.)" :items="ktShares"

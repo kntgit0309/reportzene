@@ -186,3 +186,39 @@ def test_a_seller_with_rows_in_several_teams_files_gets_the_sum_of_their_pl2_cf(
         assert rows["Linh"]["cf"] == round(2571.47 + 100.0, 2)  # Etsy 2's file + Etsy 1's
         assert rows["Huyền"]["cf"] == 1000.0 and rows["AN NTT"]["cf"] == 13514.58  # one file each
         assert data["total"]["cf"] == round(2571.47 + 100.0 + 1000.0 + 13514.58, 2) and len(data["cf"]["sheets"]) == 2
+
+
+def test_each_seller_has_the_plan_of_the_quarter_and_their_pl2_per_month(client, member, upstream, business_plan, seller_sheet, cf_sheet, sellers):  # noqa: F811
+    data = client.get(S, headers=member).json()["data"]  # 01–02/10
+    rows = {r["seller"]: r for r in data["sellers"]}
+    linh = rows["Linh"]
+    assert linh["plan_total"] == 8938 + 25150 + 23357  # KH quý: T10 + T11 + T12 of the seller plan sheet
+    assert [m["month"] for m in linh["months"]] == ["10-2026", "11-2026", "12-2026"]
+    octo, nov, dec = linh["months"]
+    # October is in the range: its plan, plan to date, KT, quantity and CF (finance books October whole)
+    assert octo == {"month": "10-2026", "plan": 8938, "plan_to_date": round(8938 * TO_DATE, 2), "quantity": 30, "kt": 10 * KT_PER_PIECE, "cf": 2571.47}
+    # November and December only have their plan: nothing sold or booked there as far as the range goes
+    assert nov == {"month": "11-2026", "plan": 25150, "plan_to_date": None, "quantity": None, "kt": None, "cf": None}
+    assert dec["plan"] == 23357 and dec["kt"] is None
+    assert data["total"]["plan_total"] == round(sum(r["plan_total"] for r in data["sellers"] if r["plan_total"] is not None), 2)
+    # a seller outside the plan has no plan, but their KT per month
+    khoa = rows["Khoa NT"]
+    assert khoa["plan_total"] is None and [m["plan"] for m in khoa["months"]][:1] == [None]
+    assert khoa["months"][0]["kt"] == 3 * KT_PER_PIECE and khoa["months"][0]["plan_to_date"] is None
+
+
+def test_a_range_over_two_months_asks_trackingis_per_month_and_splits_each_sellers_pl2(client, member, upstream, business_plan, seller_sheet,
+                                                                                         cf_sheet, sellers):  # noqa: F811
+    ASKED.clear()
+    data = client.get("/api/v1/report/etsy/pl2/sellers?date_from=2026-10-30&date_to=2026-11-02", headers=member).json()["data"]
+    # one seller view per priced product and month, each on the range's days of that month
+    assert sorted((a["from"][0], a["to"][0], a["sub_product_types[]"][0]) for a in ASKED) == sorted(
+        (f, t, sub) for f, t in (("2026-10-30", "2026-10-31"), ("2026-11-01", "2026-11-02")) for sub in ("Blanket", "Cutout Ornament", "Shirt"))
+    linh = next(r for r in data["sellers"] if r["seller"] == "Linh")
+    octo, nov, dec = linh["months"]
+    # the fake trackingis answers each query with the same pieces, so each month has Linh's 10 pieces of each product
+    assert octo["quantity"] == nov["quantity"] == 30 and linh["quantity"] == 60
+    assert octo["kt"] == nov["kt"] == 10 * KT_PER_PIECE and linh["kt"] == 2 * 10 * KT_PER_PIECE  # the months add up to the range
+    assert octo["plan_to_date"] == round(8938 * 2 / 31, 2) and nov["plan_to_date"] == round(25150 * 2 / 30, 2)
+    assert linh["plan"] == round(8938 * 2 / 31 + 25150 * 2 / 30, 2) and dec["plan_to_date"] is None
+    assert octo["cf"] == 2571.47 and nov["cf"] == 0  # finance's November row of Linh is 0
