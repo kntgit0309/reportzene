@@ -8,6 +8,7 @@ from app.models import SheetSource
 from app.services import report, seller_plan, trackingis
 from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD with Ornament $6, Blanket $8, Shirt $5.5 PL2/item)
 from tests.test_seller_cf import HEADER as CF_HEADER  # "1.2 P&L Seller (Sau IP)_Monthly": Anh NTM, Linh PT, AN NTT
+from tests.test_seller_cf import _row as cf_row
 from tests.test_seller_cf import ROWS as CF_ROWS
 from tests.test_seller_plan import seller_sheet  # noqa: F401  (fixture: plan sheet with Huyền, Vân and Linh)
 
@@ -166,3 +167,22 @@ def test_a_seller_filter_keeps_their_rows_only_and_a_member_limited_to_their_sal
     mine = client.get(S, headers=member).json()["data"]  # Linh herself: not Huyền's or Vân's plan, nor anybody's CF
     assert [r["seller"] for r in mine["sellers"]] == ["Linh"]
     assert mine["total"]["plan"] == round(8938 * TO_DATE, 2) and mine["total"]["cf"] == 2571.47
+
+
+def test_a_seller_with_rows_in_several_teams_files_gets_the_sum_of_their_pl2_cf(client, db_factory, admin, member, upstream, business_plan,
+                                                                                  seller_sheet, cf_sheet, sellers):  # noqa: F811
+    # Etsy 1's file lists Huyền (only there) and Linh too (she sells from Etsy 1 stores as well as Etsy 2's: her PL2 is both)
+    etsy1 = [cf_row("Tổng hợp", "1"), cf_row("Profit tính KPI", "Huyền HTN", *[0] * 9, 1000.0, 50.0), cf_row("", "Linh PT", *[0] * 9, 100.0, 5.0),
+             cf_row("", "", *[0] * 12)]
+    with db_factory() as s:
+        sheet = SheetSource(name="Etsy 1 P&L Seller", url="https://x.larksuite.com/sheets/AbCdEfGhIjKl", tab_title="1.2 P&L Seller (Sau IP)_Monthly",
+                            header=CF_HEADER, rows=etsy1, row_count=len(etsy1))
+        s.add(sheet)
+        s.commit()
+    for order in ([sheet.id, cf_sheet.id], [cf_sheet.id, sheet.id]):  # the sum does not depend on which file comes first
+        client.put("/api/v1/settings", json={"seller_cf_sheets": [str(i) for i in order]}, headers=admin)
+        data = client.get(S, headers=member).json()["data"]
+        rows = {r["seller"]: r for r in data["sellers"]}
+        assert rows["Linh"]["cf"] == round(2571.47 + 100.0, 2)  # Etsy 2's file + Etsy 1's
+        assert rows["Huyền"]["cf"] == 1000.0 and rows["AN NTT"]["cf"] == 13514.58  # one file each
+        assert data["total"]["cf"] == round(2571.47 + 100.0 + 1000.0 + 13514.58, 2) and len(data["cf"]["sheets"]) == 2
