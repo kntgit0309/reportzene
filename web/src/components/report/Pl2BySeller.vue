@@ -150,7 +150,7 @@ function exportCsv() {
       </div>
     </div>
 
-    <SellerCards v-if="data" :data="data" />
+    <SellerCards v-if="data" :data="data" :params="params" />
 
     <div v-if="showChart && (ktShares.length || cfShares.length)" class="mb-3 grid gap-3 lg:grid-cols-2">
       <ShareBarChart v-if="ktShares.length" title="PL2 KT share by seller" value-label="PL2 KT (est.)" :items="ktShares"

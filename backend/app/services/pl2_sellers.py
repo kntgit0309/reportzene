@@ -19,6 +19,10 @@ seller cards of Etsy › Report: a month's whole plan, its plan to date, KT and 
 only its plan. The seller view is asked once per month the range touches (the range clipped to that month), so a month's KT is
 what trackingis says for those days, and the months add up to the range. `products` is the same per product of the plan (Other
 products last): the seller's pieces and PL2 KT in all and per month, for the dialog of a seller card.
+
+`pl2_seller_types` opens a product of that dialog: for the sellers asked (a card's `seller_ids`), its product types (the team's
+grouping on the product's page: Ornament → Acrylic + Wood, Shell, Shaker…) and sub product types, with the same pieces and PL2 KT
+per month. It is asked when a seller card is opened: one trackingis query per month the range touches.
 """
 import calendar
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +35,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import AppError
 from app.models import User
 from app.services import family_accounts, family_plan, family_report, overview, report, seller_cf, seller_plan, settings_store
+from app.services.families import FAMILIES
 from app.services.pl2_accounts import _sheet
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
 
@@ -62,6 +67,75 @@ def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery
             raise
 
 
+def _fetch_types(client: TrackingisClient, q: ReportQuery, every: tuple[str, ...]) -> dict[str, list[dict[str, Any]]]:
+    """Month → the product type view (a row per sub product type) of the `every` sub types, for the range's days of that month."""
+    spans = _spans(q)
+    with ThreadPoolExecutor(max_workers=family_report.WORKERS) as pool:
+        futures = {month: pool.submit(family_report._product_types, client, family_report._only(replace(q, date_from=a, date_to=b), every))
+                   for month, a, b in spans}
+        try:
+            return {month: futures[month].result() for month, _, _ in spans}
+        except TrackingisError:
+            pool.shutdown(cancel_futures=True)
+            raise
+
+
+def _node(name: str, subs: list[str], sold: dict[str, dict[str, int]], rate: float, children: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """One line of the tree: pieces and PL2 KT of these sub types (`sold`: sub type lower case → month → pieces) at `rate`."""
+    months: dict[str, dict[str, Any]] = {}
+    for sub in subs:
+        for month, pcs in sold.get(sub.lower(), {}).items():
+            m = months.setdefault(month, {"quantity": 0, "kt": 0.0})
+            m["quantity"] += pcs
+            m["kt"] += pcs * rate
+    out: dict[str, Any] = {"name": name, "quantity": sum(m["quantity"] for m in months.values()),
+                           "kt": round(sum(m["kt"] for m in months.values()), 2),
+                           "months": {k: {"quantity": m["quantity"], "kt": round(m["kt"], 2)} for k, m in months.items()}}
+    if children:
+        out["children"] = children
+    return out
+
+
+def _children(line: dict[str, Any], sold: dict[str, dict[str, int]]) -> list[dict[str, Any]]:
+    """What a product opens onto: its product types when its page groups them (Ornament, Blanket, Quilted), each onto its sub
+    product types; else its sub product types. Sub product types without sales are left out, product types are not."""
+    rate = line["rate"]
+
+    def leaves(subs: list[str] | tuple[str, ...]) -> list[dict[str, Any]]:
+        return [n for n in (_node(s, [s], sold, rate) for s in subs) if n["quantity"]]
+
+    family = FAMILIES.get(line.get("page") or "")
+    if family is not None and family.name.lower() == line["name"].lower() and len(family.groups) > 1:
+        out = []
+        for group, subs in family.groups:
+            own = [] if len(subs) == 1 and subs[0].lower() == group.lower() else leaves(subs)  # a type that is one sub type of its name
+            out.append(_node(group, list(subs), sold, rate, own))
+        return out
+    if len(line["sub_types"]) == 1 and line["sub_types"][0].lower() == line["name"].lower():
+        return []
+    return leaves(line["sub_types"])
+
+
+def pl2_seller_types(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+    """{products: [{name, children: [{name, quantity, kt, months: {MM-YYYY: {quantity, kt}}, children?}]}], months, query}: the
+    pieces and PL2 KT of the sellers the report is filtered by (`sellers`, ids; a limited seller gets their own), per product
+    of the plan, then per product type and sub product type, for the range's months."""
+    q = report.build_query(db, {**params, "view": "date"}, user)
+    lines = overview.priced_products(db, user)
+    months = list(family_plan.month_days(q.date_from, q.date_to))
+    query = {"date_from": q.date_from, "date_to": q.date_to, "sellers": q.lists.get("sellers", [])}
+    if not lines:
+        return {"products": [], "months": months, "query": query}
+    every = tuple(dict.fromkeys(s for line in lines for s in line["sub_types"]))
+    data = report._call(db, user, report._key("pl2_seller_types", q), report.CACHE_TTL_S, lambda c: _fetch_types(c, q, every))
+    sold: dict[str, dict[str, int]] = {}
+    for month, rows in data.items():
+        for r in rows:
+            name = str(r.get("product_type") or "").strip().lower()
+            sold.setdefault(name, {})[month] = sold.get(name, {}).get(month, 0) + int(r.get("total_quantity") or 0)
+    return {"products": [{"name": line["name"], "children": _children(line, sold)} for line in lines], "months": months, "query": query}
+
+
 def _plan_table(db: Session, names: list[str]) -> dict[str, Any]:
     """{table, sheet} of the seller plan sheet (the table where most of `names` have a row); while the sheet cannot be read,
     {table, built_in: True, reason} with the built-in Q4 plan and why the sheet is not used."""
@@ -85,7 +159,7 @@ def _plan_to_date(pl2: dict[int, float], months: dict[str, tuple[int, int]], pla
 
 def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: float | None, kt: float | None, cf: float | None,
           against: float | None, plan_total: float | None = None, months: list[dict[str, Any]] | None = None,
-          products: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+          products: list[dict[str, Any]] | None = None, seller_ids: list[str] | None = None) -> dict[str, Any]:
     """One row. `against` is the plan the gaps are measured from (the plan, or $0 for a seller outside it; None = no plan at
     all): kt_gap = KT − against, cf_gap = CF − against; kt_pct / cf_pct = KT / CF as a share of the plan. plan_total = the
     plan's months added up (KH quý), months = the seller's PL2 per month, products = their pieces and KT per product (see the
@@ -98,6 +172,7 @@ def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: flo
 
     return {"seller": name, "sellers": sellers, "in_plan": in_plan, "quantity": quantity, "plan": None if plan is None else round(plan, 2),
             "plan_total": None if plan_total is None else round(plan_total, 2), "months": months or [], "products": products or [],
+            "seller_ids": seller_ids or [],
             "kt": None if kt is None else round(kt, 2), "cf": None if cf is None else round(cf, 2),
             "kt_gap": diff(kt), "kt_pct": ratio(kt), "cf_gap": diff(cf), "cf_pct": ratio(cf),
             "cf_minus_kt": round(cf - kt, 2) if kt is not None and cf is not None else None}
@@ -105,13 +180,14 @@ def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: flo
 
 def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{sellers: [{seller, sellers, in_plan, quantity, plan, plan_total, months, kt, cf, kt_gap, kt_pct, cf_gap, cf_pct,
-    cf_minus_kt, products}], total, kt,
+    cf_minus_kt, products, seller_ids}], total, kt,
     plan, cf, query}; plan = PL2 plan to date ($), kt_gap = kt − plan, cf_gap = cf − plan; kt / plan / cf = {"error"} when
     not available (a field of a row is then None); plan = {built_in: True, reason, months, missing} while the built-in copy of
     the Q4 plan stands in for the sheet, else {sheet, months, missing}."""
     q = report.build_query(db, {**params, "view": "date"}, user)
     rt = settings_store.runtime(db)
     options = {str(o["id"]): str(o["name"]) for o in report.filter_options(db, "sellers", user)}
+    ids = {name.lower(): ident for ident, name in options.items()}  # trackingis seller name → id, to open a card's product types
     months = family_plan.month_days(q.date_from, q.date_to)
 
     lines = overview.priced_products(db, user)
@@ -215,7 +291,7 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
     out = [_line(r["name"], r["sellers"], r["in_plan"], r["quantity"], r["plan"], r["kt"], r["cf"],
                  (r["plan"] if r["in_plan"] else 0.0) if has_plan else None,
                  sum(r["pl2"].get(m, 0.0) for m in planned) if r["in_plan"] and planned else None, month_rows(r),
-                 product_rows(r) if has_kt else None) for r in [*first, *rest]]
+                 product_rows(r) if has_kt else None, [ids[n.lower()] for n in r["sellers"] if n.lower() in ids]) for r in [*first, *rest]]
 
     def add(field: str) -> float | None:
         values = [r[field] for r in out if r[field] is not None]
