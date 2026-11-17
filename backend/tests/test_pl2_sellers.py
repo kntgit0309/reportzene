@@ -1,4 +1,5 @@
 """Etsy › Report, PL2 per seller: KT (seller view × PL2/item) next to the seller plan sheet and the seller CF sheets."""
+import json
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -297,3 +298,23 @@ def test_a_limited_seller_can_only_open_their_own_products(client, admin, member
     client.patch(f"/api/v1/users/{me['id']}", json={"scope_sellers": ["41"]}, headers=admin)
     client.get("/api/v1/report/etsy/pl2/sellers/types?date_from=2026-10-01&date_to=2026-10-02&sellers=43", headers=member)  # Huyền's id
     assert by_type and all(a["sellers[]"] == ["41"] for a in by_type)  # forced to hers, whatever the card asks
+
+
+def test_a_seller_limited_to_their_sales_gets_their_own_cards_data_and_nobody_elses(client, admin, member, upstream, business_plan, seller_sheet,
+                                                                                    cf_sheet, sellers):  # noqa: F811
+    me = client.get("/api/v1/auth/me", headers=member).json()["data"]
+    client.patch(f"/api/v1/users/{me['id']}", json={"scope_sellers": ["41"]}, headers=admin)  # Linh herself
+    mine = client.get(S, headers=member).json()["data"]
+    [linh] = mine["sellers"]
+    assert linh["seller"] == "Linh" and linh["plan_total"] == 8938 + 25150 + 23357  # her card: KH quý, KH lũy kế, % HT lũy kế
+    assert [m["month"] for m in linh["months"]] == ["10-2026", "11-2026", "12-2026"] and linh["months"][0]["cf"] == 2571.47
+    assert [p["name"] for p in linh["products"]] == ["Ornament", "Blanket", "Shirt"] and linh["products"][0]["months"]["10-2026"]["quantity"] == 10
+    assert mine["total"]["plan_total"] == linh["plan_total"] and mine["total"]["kt"] == linh["kt"]  # no other seller in the total either
+    # nothing of the others anywhere in what she gets: not their names, nor their plan, KT or CF
+    text = json.dumps(mine, ensure_ascii=False)
+    for other in ("Huyền", "Vân", "Khoa", "AN NTT", "Mai"):
+        assert other not in text, other
+    for figure in ("9149", "25598", "13514.58"):  # Huyền's T10 / T11 plan, An's CF
+        assert f'"{figure}"' not in text and f": {figure}," not in text, figure
+    # an admin viewing as her sees the same
+    assert client.get(S, headers={**admin, "X-View-As": str(me["id"])}).json()["data"] == mine
