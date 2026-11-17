@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { money, moneyRound, num, pct } from '../../lib/format'
 import { cfColor, gapColor, signedMoney } from '../../lib/plan'
-import type { Pl2SellerLine, Pl2SellerMonth, Pl2SellerProduct, Pl2Sellers } from '../../lib/types'
+import { fetchPl2SellerTypes } from '../../lib/report'
+import type { Pl2SellerLine, Pl2SellerMonth, Pl2SellerNode, Pl2SellerProduct, Pl2SellerTypes, Pl2Sellers } from '../../lib/types'
 
 // Etsy › Report › PL2 by seller: one card per seller of the plan (PL2 KT, progress against the quarter's plan with a mark at the
 // plan to date), a card for the other sellers, and a click opens the seller's PL2 per month.
-const props = defineProps<{ data: Pl2Sellers }>()
+const props = defineProps<{ data: Pl2Sellers; params: Record<string, string> }>()
 
 const LOW = 0.8 // below 80% of the plan to date the bar turns red
 const hasKt = computed(() => !props.data.kt.error)
@@ -29,9 +31,25 @@ const subtitle = (s: Pl2SellerLine) => (s.sellers.length && s.sellers.join(' + '
 
 const open = ref(false)
 const picked = ref<Pl2SellerLine | null>(null)
-function show(s: Pl2SellerLine) {
+// a product opens onto its product types and sub product types: asked when the card is opened (one query per month of the range)
+const details = ref<Pl2SellerTypes | null>(null)
+const detailsLoading = ref(false)
+let ticket = 0
+async function show(s: Pl2SellerLine) {
   picked.value = s
+  details.value = null
   open.value = true
+  if (!s.seller_ids?.length) return
+  const mine = ++ticket
+  detailsLoading.value = true
+  try {
+    const got = await fetchPl2SellerTypes({ ...props.params, sellers: s.seller_ids.join(',') })
+    if (mine === ticket) details.value = got
+  } catch (e) {
+    if (mine === ticket) ElMessage.error((e as Error).message)
+  } finally {
+    if (mine === ticket) detailsLoading.value = false
+  }
 }
 
 type Row = Partial<Pl2SellerMonth> & { label: string; total?: boolean; cfPct?: number | null; ktPct?: number | null }
@@ -47,24 +65,38 @@ const rows = computed<Row[]>(() => {
 const rowClass = ({ rowIndex, row }: { rowIndex: number; row: Row }) => (row.total ? 'month-total' : `month-${rowIndex % 3}`)
 const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
 
-// per product: pieces and PL2 KT in each month, as the plan's products in the plan's order (only KT: the plan has no product per seller)
-type ProductRow = { name: string; product?: Pl2SellerProduct; total?: boolean }
+// per product: pieces and PL2 KT in each month, as the plan's products in the plan's order (only KT: the plan has no product per seller);
+// a product opens onto its product types and sub product types once the card's details are in
+type ProductRow = { key: string; name: string; depth: number; product?: Pl2SellerProduct; node?: Pl2SellerNode; total?: boolean; children?: ProductRow[] }
+function treeRows(nodes: Pl2SellerNode[], parent: string, depth: number): ProductRow[] {
+  return nodes.map((node) => {
+    const key = `${parent}/${node.name}`
+    return { key, name: node.name, depth, node, children: node.children?.length ? treeRows(node.children, key, depth + 1) : undefined }
+  })
+}
 const productRows = computed<ProductRow[]>(() => {
   const s = picked.value
   if (!s || !s.products.length) return []
-  return [...s.products.map((product) => ({ name: product.name, product })), { name: 'Tổng', total: true }]
+  const kids = new Map((details.value?.products ?? []).map((p) => [p.name, p.children]))
+  const top: ProductRow[] = s.products.map((product) => {
+    const children = kids.get(product.name)
+    return { key: product.name, name: product.name, depth: 0, product, children: children?.length ? treeRows(children, product.name, 1) : undefined }
+  })
+  return [...top, { key: '_total', name: 'Tổng', depth: 0, total: true }]
 })
-const productRowClass = ({ row }: { row: ProductRow }) => (row.total ? 'month-total' : '')
+const productRowClass = ({ row }: { row: ProductRow }) => (row.total ? 'month-total' : row.depth ? 'child-row' : '')
 // a month the range does not touch has no figures (null); a touched month without sales is 0
 function cell(slot: unknown, month: Pl2SellerMonth): { quantity: number; kt: number } | null {
   const row = slot as ProductRow // the table's slot row is untyped
   if (month.kt == null) return null
   if (row.total) return { quantity: month.quantity ?? 0, kt: month.kt }
-  return row.product?.months[month.month] ?? { quantity: 0, kt: 0 }
+  return (row.node ?? row.product)?.months[month.month] ?? { quantity: 0, kt: 0 }
 }
 function overall(slot: unknown): { quantity: number; kt: number } {
   const row = slot as ProductRow
-  return row.total ? { quantity: picked.value?.quantity ?? 0, kt: picked.value?.kt ?? 0 } : { quantity: row.product?.quantity ?? 0, kt: row.product?.kt ?? 0 }
+  if (row.total) return { quantity: picked.value?.quantity ?? 0, kt: picked.value?.kt ?? 0 }
+  const line = row.node ?? row.product
+  return { quantity: line?.quantity ?? 0, kt: line?.kt ?? 0 }
 }
 const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
 </script>
@@ -141,10 +173,13 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
         </el-table>
         <template v-if="productRows.length && hasKt">
           <div class="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Theo product <span class="font-normal normal-case tracking-normal text-slate-400">· số KT: sales (pcs) và PL2 theo KT</span>
+            Theo product <span class="font-normal normal-case tracking-normal text-slate-400">· số KT: sales (pcs) và PL2 theo KT · bấm ▸ để xem product type và sub product type</span>
           </div>
-          <el-table :data="productRows" :row-class-name="productRowClass" size="small" class="w-full" border>
-            <el-table-column prop="name" label="Product" min-width="170"><template #default="{ row }"><b>{{ row.name }}</b></template></el-table-column>
+          <el-table v-loading="detailsLoading" :data="productRows" row-key="key" :tree-props="{ children: 'children' }"
+                    :row-class-name="productRowClass" size="small" class="w-full" border>
+            <el-table-column prop="name" label="Product" min-width="200">
+              <template #default="{ row }"><span :class="row.depth ? 'text-slate-600' : 'font-bold'">{{ row.name }}</span></template>
+            </el-table-column>
             <el-table-column v-for="(m, i) in picked.months" :key="m.month" :label="`Tháng ${Number(m.month.slice(0, 2))}`" align="center"
                              :label-class-name="`mh-${i % 3}`">
               <el-table-column label="Sales" align="right" width="76" :label-class-name="`mh-${i % 3}`">
@@ -194,5 +229,6 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
 :deep(.month-0 td:first-child) { border-left: 4px solid #2563eb; }
 :deep(.month-1 td:first-child) { border-left: 4px solid #16a34a; }
 :deep(.month-2 td:first-child) { border-left: 4px solid #ea580c; }
+:deep(.child-row td) { background: #fafbfd; }
 :deep(.month-total td) { background: #f6f8fb !important; font-weight: 600; }
 </style>

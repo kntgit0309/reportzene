@@ -64,6 +64,12 @@ def pl2_per_seller(request: Request, db: Session = Depends(get_db), user: User =
     return ok(pl2_sellers.pl2_sellers(db, _params(request), user), request)
 
 
+@router.get("/pl2/sellers/types")
+def pl2_seller_types(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Pieces and PL2 theo KT of the filtered sellers per product, product type and sub product type, per month (a seller card)."""
+    return ok(pl2_sellers.pl2_seller_types(db, _params(request), user), request)
+
+
 @router.get("/{family}")
 def family_sales(request: Request, family: str = Path(pattern=FAMILY_KEYS), db: Session = Depends(get_db),
                  user: User = Depends(current_user)) -> dict[str, Any]:

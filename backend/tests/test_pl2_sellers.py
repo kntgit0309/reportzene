@@ -240,3 +240,60 @@ def test_each_seller_has_their_pieces_and_kt_per_product_in_all_and_per_month(cl
     # a seller of the plan that sold nothing still lists the products, at zero
     vân = next(r for r in data["sellers"] if r["seller"] == "Vân")
     assert [p["quantity"] for p in vân["products"]] == [0, 0, 0] and all(p["months"] == {} for p in vân["products"])
+
+
+def test_a_card_knows_its_trackingis_seller_ids(client, member, upstream, business_plan, seller_sheet, sellers):  # noqa: F811
+    rows = {r["seller"]: r for r in client.get(S, headers=member).json()["data"]["sellers"]}
+    assert rows["Linh"]["seller_ids"] == ["41"] and rows["Huyền"]["seller_ids"] == ["43"] and rows["Khoa NT"]["seller_ids"] == ["42"]
+    assert rows["Vân"]["seller_ids"] == []  # a seller of the plan with no trackingis seller of that name
+
+
+@pytest.fixture()
+def by_type(monkeypatch):
+    """Fake trackingis product type view: pieces per sub product type, per month of the query."""
+    asked: list[dict[str, list[str]]] = []
+    oct_, nov = {"Cutout Ornament": 5, "Ornament": 3, "Shell ornament": 2, "Blanket": 4, "Shirt": 7}, {"Cutout Ornament": 1, "Woven Blanket": 2}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        query = parse_qs(urlparse(str(req.url)).query)
+        asked.append(query)
+        sold = oct_ if query["from"][0].startswith("2026-10") else nov
+        rows = [{"product_type": name, "total_order": k, "total_quantity": k, "total": 0, "sale_tax": 0, "total_revenue": 10.0 * k} for name, k in sold.items()]
+        return httpx.Response(200, json={"success": True, "data": {"data": rows, "paging": {"current_page": 1, "per_page": 200,
+                                                                                              "total": len(rows), "last_page": 1}}})
+
+    monkeypatch.setattr(trackingis, "TEST_TRANSPORT", httpx.MockTransport(handler))
+    return asked
+
+
+def test_a_product_opens_onto_its_product_types_and_sub_product_types(client, member, by_type, business_plan, sellers):  # noqa: F811
+    T = "/api/v1/report/etsy/pl2/sellers/types?date_from=2026-10-30&date_to=2026-11-02&sellers=41"
+    data = client.get(T, headers=member).json()["data"]
+    # one product type view per month, each on the range's days of that month and the card's sellers
+    assert sorted(a["from"][0] for a in by_type) == ["2026-10-30", "2026-11-01"] and all(a["view"] == ["product_type"] for a in by_type)
+    assert all(a["sellers[]"] == ["41"] for a in by_type) and data["months"] == ["10-2026", "11-2026"]
+    products = {p["name"]: p["children"] for p in data["products"]}
+    assert list(products) == ["Ornament", "Blanket", "Shirt"]  # the plan's products ($6, $8, $5.5 per item)
+
+    # Ornament → the team's product types (Acrylic + Wood, Shell, …) → the sub product types that sold
+    groups = {g["name"]: g for g in products["Ornament"]}
+    assert list(groups) == ["Acrylic + Wood", "Shell", "Shaker", "Ceramic", "Glass", "Felt", "Others"]
+    acrylic = groups["Acrylic + Wood"]
+    assert (acrylic["quantity"], acrylic["kt"]) == (9, 54.0)  # 5 + 3 in October, 1 in November, at $6
+    assert acrylic["months"] == {"10-2026": {"quantity": 8, "kt": 48.0}, "11-2026": {"quantity": 1, "kt": 6.0}}
+    assert [(c["name"], c["quantity"]) for c in acrylic["children"]] == [("Cutout Ornament", 6), ("Ornament", 3)]  # no row for what sold nothing
+    assert [c["name"] for c in groups["Shell"]["children"]] == ["Shell ornament"] and "children" not in groups["Shaker"]
+    assert groups["Shaker"]["quantity"] == 0  # a product type of the page stays, at zero
+
+    blanket = {g["name"]: g for g in products["Blanket"]}
+    assert [(c["name"], c["quantity"], c["kt"]) for c in blanket["Velveteen"]["children"]] == [("Blanket", 4, 32.0)]
+    assert [(c["name"], c["quantity"]) for c in blanket["Woven"]["children"]] == [("Woven Blanket", 2)]
+    # Shirt is one product type: it opens straight onto its sub product types
+    assert [(c["name"], c["quantity"], c["kt"]) for c in products["Shirt"]] == [("Shirt", 7, 38.5)]
+
+
+def test_a_limited_seller_can_only_open_their_own_products(client, admin, member, by_type, business_plan, sellers):  # noqa: F811
+    me = client.get("/api/v1/auth/me", headers=member).json()["data"]
+    client.patch(f"/api/v1/users/{me['id']}", json={"scope_sellers": ["41"]}, headers=admin)
+    client.get("/api/v1/report/etsy/pl2/sellers/types?date_from=2026-10-01&date_to=2026-10-02&sellers=43", headers=member)  # Huyền's id
+    assert by_type and all(a["sellers[]"] == ["41"] for a in by_type)  # forced to hers, whatever the card asks
