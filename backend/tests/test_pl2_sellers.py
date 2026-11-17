@@ -222,3 +222,21 @@ def test_a_range_over_two_months_asks_trackingis_per_month_and_splits_each_selle
     assert octo["plan_to_date"] == round(8938 * 2 / 31, 2) and nov["plan_to_date"] == round(25150 * 2 / 30, 2)
     assert linh["plan"] == round(8938 * 2 / 31 + 25150 * 2 / 30, 2) and dec["plan_to_date"] is None
     assert octo["cf"] == 2571.47 and nov["cf"] == 0  # finance's November row of Linh is 0
+
+
+def test_each_seller_has_their_pieces_and_kt_per_product_in_all_and_per_month(client, member, upstream, business_plan, seller_sheet, sellers):  # noqa: F811
+    data = client.get("/api/v1/report/etsy/pl2/sellers?date_from=2026-10-30&date_to=2026-11-02", headers=member).json()["data"]
+    linh = next(r for r in data["sellers"] if r["seller"] == "Linh")
+    # the plan's products (Ornament $6, Blanket $8, Shirt $5.5 per item), in the plan's order; 10 pieces of each in each month
+    assert [p["name"] for p in linh["products"]] == ["Ornament", "Blanket", "Shirt"]
+    ornament, blanket, shirt = linh["products"]
+    assert ornament["months"] == {"10-2026": {"quantity": 10, "kt": 60.0}, "11-2026": {"quantity": 10, "kt": 60.0}}
+    assert (ornament["quantity"], ornament["kt"]) == (20, 120.0) and (blanket["quantity"], blanket["kt"]) == (20, 160.0)
+    assert (shirt["quantity"], shirt["kt"]) == (20, 110.0)
+    # the products add up to the seller's pieces and PL2 KT, month by month too
+    assert sum(p["quantity"] for p in linh["products"]) == linh["quantity"] and round(sum(p["kt"] for p in linh["products"]), 2) == linh["kt"]
+    for month in linh["months"][:2]:
+        assert round(sum(p["months"][month["month"]]["kt"] for p in linh["products"]), 2) == month["kt"]
+    # a seller of the plan that sold nothing still lists the products, at zero
+    vân = next(r for r in data["sellers"] if r["seller"] == "Vân")
+    assert [p["quantity"] for p in vân["products"]] == [0, 0, 0] and all(p["months"] == {} for p in vân["products"])

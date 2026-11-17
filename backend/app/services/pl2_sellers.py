@@ -17,7 +17,8 @@ added by hand (Felt) are not tied to a seller, so they are not in KT here.
 Each row also carries `plan_total` (the plan's months added up: "KH quý") and `months`, the seller's PL2 per month for the
 seller cards of Etsy › Report: a month's whole plan, its plan to date, KT and CF; a month the report's range does not touch has
 only its plan. The seller view is asked once per month the range touches (the range clipped to that month), so a month's KT is
-what trackingis says for those days, and the months add up to the range.
+what trackingis says for those days, and the months add up to the range. `products` is the same per product of the plan (Other
+products last): the seller's pieces and PL2 KT in all and per month, for the dialog of a seller card.
 """
 import calendar
 from concurrent.futures import ThreadPoolExecutor
@@ -83,10 +84,12 @@ def _plan_to_date(pl2: dict[int, float], months: dict[str, tuple[int, int]], pla
 
 
 def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: float | None, kt: float | None, cf: float | None,
-          against: float | None, plan_total: float | None = None, months: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+          against: float | None, plan_total: float | None = None, months: list[dict[str, Any]] | None = None,
+          products: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """One row. `against` is the plan the gaps are measured from (the plan, or $0 for a seller outside it; None = no plan at
     all): kt_gap = KT − against, cf_gap = CF − against; kt_pct / cf_pct = KT / CF as a share of the plan. plan_total = the
-    plan's months added up (KH quý), months = the seller's PL2 per month (see the module's docstring)."""
+    plan's months added up (KH quý), months = the seller's PL2 per month, products = their pieces and KT per product (see the
+    module's docstring)."""
     def diff(v: float | None) -> float | None:
         return None if v is None or against is None else round(v - against, 2)
 
@@ -94,7 +97,7 @@ def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: flo
         return round(v / plan, 4) if v is not None and plan else None
 
     return {"seller": name, "sellers": sellers, "in_plan": in_plan, "quantity": quantity, "plan": None if plan is None else round(plan, 2),
-            "plan_total": None if plan_total is None else round(plan_total, 2), "months": months or [],
+            "plan_total": None if plan_total is None else round(plan_total, 2), "months": months or [], "products": products or [],
             "kt": None if kt is None else round(kt, 2), "cf": None if cf is None else round(cf, 2),
             "kt_gap": diff(kt), "kt_pct": ratio(kt), "cf_gap": diff(cf), "cf_pct": ratio(cf),
             "cf_minus_kt": round(cf - kt, 2) if kt is not None and cf is not None else None}
@@ -102,7 +105,7 @@ def _line(name: str, sellers: list[str], in_plan: bool, quantity: int, plan: flo
 
 def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     """{sellers: [{seller, sellers, in_plan, quantity, plan, plan_total, months, kt, cf, kt_gap, kt_pct, cf_gap, cf_pct,
-    cf_minus_kt}], total, kt,
+    cf_minus_kt, products}], total, kt,
     plan, cf, query}; plan = PL2 plan to date ($), kt_gap = kt − plan, cf_gap = cf − plan; kt / plan / cf = {"error"} when
     not available (a field of a row is then None); plan = {built_in: True, reason, months, missing} while the built-in copy of
     the Q4 plan stands in for the sheet, else {sheet, months, missing}."""
@@ -121,13 +124,14 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
             for line, found in zip(lines, per_line, strict=True):
                 for r in found:
                     name = str(r.get("seller_name") or "").strip() or NO_SELLER
-                    s = sold.setdefault(name.lower(), {"name": name, "quantity": 0, "kt": 0.0, "months": {}})
+                    s = sold.setdefault(name.lower(), {"name": name, "quantity": 0, "kt": 0.0, "months": {}, "products": {}})
                     pcs = int(r.get("total_quantity") or 0)
                     s["quantity"] += pcs
                     s["kt"] += pcs * line["rate"]
-                    m = s["months"].setdefault(month, {"quantity": 0, "kt": 0.0})
-                    m["quantity"] += pcs
-                    m["kt"] += pcs * line["rate"]
+                    for into in (s["months"].setdefault(month, {"quantity": 0, "kt": 0.0}),
+                                 s["products"].setdefault(line["name"], {}).setdefault(month, {"quantity": 0, "kt": 0.0})):
+                        into["quantity"] += pcs
+                        into["kt"] += pcs * line["rate"]
 
     # plan and CF are per seller across all stores and teams: filters that cut across them leave both out
     teams = q.lists.get("teams") or []
@@ -149,7 +153,7 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
 
     def blank(name: str, in_plan: bool, plan_to_date: float | None = None, pl2: dict[int, float] | None = None) -> dict[str, Any]:
         return {"name": name, "sellers": [], "in_plan": in_plan, "quantity": 0, "kt": 0.0 if has_kt else None, "plan": plan_to_date, "cf": None,
-                "pl2": pl2 or {}, "months": {}, "cf_months": {}}
+                "pl2": pl2 or {}, "months": {}, "cf_months": {}, "products": {}}
 
     rows: dict[str, dict[str, Any]] = {key: blank(row["name"], True, _plan_to_date(row["pl2"], months, planned), row["pl2"])
                                        for key, row in plan_rows.items()}
@@ -163,6 +167,11 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
                 d = r["months"].setdefault(month, {"quantity": 0, "kt": 0.0})
                 d["quantity"] += m["quantity"]
                 d["kt"] += m["kt"]
+            for name, by_month in s["products"].items():
+                for month, m in by_month.items():
+                    d = r["products"].setdefault(name, {}).setdefault(month, {"quantity": 0, "kt": 0.0})
+                    d["quantity"] += m["quantity"]
+                    d["kt"] += m["kt"]
     for key, row in cf_rows.items():
         # finance's rows: the months the range touches count whole
         r = rows.setdefault(key, blank(row["name"], False))
@@ -187,6 +196,16 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
                         "cf": round(r["cf_months"].get(key, 0.0), 2) if touched and r["cf"] is not None else None})
         return out
 
+    def product_rows(r: dict[str, Any]) -> list[dict[str, Any]]:
+        """The seller's pieces and PL2 KT per product of the plan, in all and per month (a month without sales has no entry)."""
+        out = []
+        for line in lines:
+            by_month = r["products"].get(line["name"], {})
+            out.append({"name": line["name"], "quantity": sum(m["quantity"] for m in by_month.values()),
+                        "kt": round(sum(m["kt"] for m in by_month.values()), 2),
+                        "months": {k: {"quantity": m["quantity"], "kt": round(m["kt"], 2)} for k, m in by_month.items()}})
+        return out
+
     picked = {key_of(options.get(s, s)) for s in q.lists.get("sellers", [])}  # empty = every seller
     shown = [(k, r) for k, r in rows.items() if not picked or k in picked]
     first = [r for _, r in shown if r["in_plan"]]  # the plan's sellers in sheet order, then the others by the size of their PL2
@@ -195,7 +214,8 @@ def pl2_sellers(db: Session, params: dict[str, Any], user: User | None = None) -
     has_plan = any(r["plan"] is not None for r in first)
     out = [_line(r["name"], r["sellers"], r["in_plan"], r["quantity"], r["plan"], r["kt"], r["cf"],
                  (r["plan"] if r["in_plan"] else 0.0) if has_plan else None,
-                 sum(r["pl2"].get(m, 0.0) for m in planned) if r["in_plan"] and planned else None, month_rows(r)) for r in [*first, *rest]]
+                 sum(r["pl2"].get(m, 0.0) for m in planned) if r["in_plan"] and planned else None, month_rows(r),
+                 product_rows(r) if has_kt else None) for r in [*first, *rest]]
 
     def add(field: str) -> float | None:
         values = [r[field] for r in out if r[field] is not None]
