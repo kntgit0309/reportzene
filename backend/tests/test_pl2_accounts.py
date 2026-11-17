@@ -196,6 +196,7 @@ def test_the_account_plan_layout_errors_name_what_is_missing():
     with pytest.raises(AppError) as err:  # the tab of the other plans: no PL2 theo KT / CF blocks
         account_plan.parse(["Shop Name", "Team", "10-2026"], [{"Shop Name": "A", "Team": "Etsy 1", "10-2026": "5"}])
     assert err.value.code == "ACCOUNT_PLAN_LAYOUT" and "PL2 theo KT" in err.value.message
+    assert "that row reads: Shop Name | Team | 10-2026" in err.value.message and "Header row" in err.value.message  # what it read, and the fix
     no_names = [{k: ("Name" if v == "Shop Name" else v) for k, v in r.items()} for r in KH_ACC_ROWS]
     with pytest.raises(AppError) as err:
         account_plan.parse(KH_ACC_HEADER, no_names)

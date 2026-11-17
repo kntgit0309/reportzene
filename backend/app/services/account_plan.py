@@ -62,12 +62,15 @@ def parse(header: list[str], rows: list[dict[str, Any]]) -> dict[str, Any]:
     """{months: {"kt": [MM-YYYY…], "cf": […]}, accounts: [{shop, team, kt: {month: $}, cf: {month: $}}]} of the tab's snapshot."""
     grid = _grid(header, rows)
     found = _blocks(grid)
+    read = " | ".join([c for c in grid[0] if c][:6]) or "nothing"
     if not found:
         raise _error('The account PL2 plan sheet has no "PL2 theo KT" or "PL2 theo CF" block with months (MM-YYYY) under its label '
-                     '(the tab "KH theo Acc", read from its row 1)')
+                     f'(the tab "KH theo Acc"). The sheet is read from its Header row down and that row reads: {read}. If it is not the '
+                     'row with the "PL2 theo KT" label (row 1 of the tab), set Header row in Lark › Team sheets to that row and Sync')
     at = next((i for i, row in enumerate(grid[:SCAN]) if any(c.lower() == "shop name" for c in row)), None)
     if at is None:
-        raise _error('The account PL2 plan sheet has no "Shop Name" label in its first rows')
+        raise _error('The account PL2 plan sheet has no "Shop Name" label in its first rows after its Header row '
+                     f'(which reads: {read}): set Header row in Lark › Team sheets to the row with the "PL2 theo KT" label and Sync')
     name_col = next(j for j, c in enumerate(grid[at]) if c.lower() == "shop name")
     team_col = next((j for j, c in enumerate(grid[at]) if c.lower() == "team"), name_col + 1)
     start = max(at, *(r for _, r in found.values())) + 1

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { auth } from '../../lib/auth'
 import { cfColor, gapColor, signedMoney } from '../../lib/plan'
 import { money, moneyRound, num, pct } from '../../lib/format'
 import { fetchPl2AccountTypes } from '../../lib/report'
@@ -18,6 +19,14 @@ const hasCf = computed(() => !props.data.cf.error)
 const cards = computed(() => props.data.accounts.filter((a) => a.kt_plan_total != null))
 const others = computed(() => (props.data.others.count ? props.data.others : null))
 const visible = computed(() => hasKt.value && !props.data.kh_pl2?.error && cards.value.length > 0)
+// why there are no cards, so that they are never just missing (the plan sheet is picked in Settings › Plan); the note of the filters
+// that cut across stores is already CF's, above, and the KT error is the block's own
+const reason = computed(() => {
+  if (visible.value || props.data.kt.error) return ''
+  const e = props.data.kh_pl2?.error
+  if (e) return e === props.data.cf.error ? '' : e
+  return 'The account PL2 plan sheet ("KH theo Acc") has no account with a plan for the months of this range'
+})
 
 // the bar: the quarter's plan is the full width, the fill is the PL2 KT so far and the mark is where the plan stands today
 const share = (v: number | null | undefined, whole: number | null | undefined) =>
@@ -123,7 +132,15 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
 </script>
 
 <template>
-  <div v-if="visible" class="mb-4">
+  <div v-if="!visible && reason && !auth.ownSalesOnly.value" class="mb-4">
+    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      Theo account <span class="font-normal normal-case tracking-normal text-slate-400">· chưa có thẻ</span>
+    </div>
+    <el-alert type="info" :closable="false" show-icon :title="reason">
+      <RouterLink v-if="auth.isAdmin.value" to="/settings" class="text-[#2563eb]">Open Settings → Plan (Account PL2 plan sheet)</RouterLink>
+    </el-alert>
+  </div>
+  <div v-else-if="visible" class="mb-4">
     <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
       Theo account <span class="font-normal normal-case tracking-normal text-slate-400">· bấm vào ô để xem chi tiết theo tháng và theo product</span>
     </div>
