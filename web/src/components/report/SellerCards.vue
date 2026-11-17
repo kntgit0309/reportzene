@@ -9,7 +9,8 @@ import type { Pl2SellerLine, Pl2SellerMonth, Pl2SellerNode, Pl2SellerProduct, Pl
 
 // Etsy › Report › PL2 by seller: one card per seller of the plan (PL2 KT, progress against the quarter's plan with a mark at the
 // plan to date), a card for the other sellers, and a click opens the seller's PL2 per month. Under them, one table of every
-// seller's month: plan, PL2 KT, PL2 CF, % of the plan to date and the seller's share of the month's PL2 KT.
+// seller's month: plan, PL2 KT, PL2 CF, % of the plan to date and the seller's share of the month, both on PL2 CF (on PL2 KT while
+// there is no CF).
 const props = defineProps<{ data: Pl2Sellers; params: Record<string, string> }>()
 
 const LOW = 0.8 // below 80% of the plan to date the bar turns red
@@ -56,17 +57,21 @@ const monthRows = computed<MonthRow[]>(() => {
   rows.push({ key: '_total', name: 'Tổng', total: true, cells: cellsOf(props.data.sellers) })
   return rows
 })
-// the share of a month's PL2 KT needs every seller: a limited seller, or a report filtered by seller, only has theirs
+// the % of the plan and the share of the month are on PL2 CF, finance's figure; PL2 KT stands in while there is no CF
+const basis = computed<'cf' | 'kt'>(() => (hasCf.value ? 'cf' : 'kt'))
+const basisLabel = computed(() => basis.value.toUpperCase())
+// the share of a month needs every seller: a limited seller, or a report filtered by seller, only has theirs
 const showShare = computed(() => !auth.ownSalesOnly.value && !props.params.sellers)
 const cellOf = (slot: unknown, month: string): MonthCell => (slot as MonthRow).cells[month] ?? { plan: null, toDate: null, kt: null, cf: null }
 const doneOf = (slot: unknown, month: string) => {
   const c = cellOf(slot, month)
-  return c.kt == null || !c.toDate ? null : c.kt / c.toDate // % HT theo KT: PL2 KT / the plan to date
+  const v = c[basis.value]
+  return v == null || !c.toDate ? null : v / c.toDate // % HT theo CF: PL2 CF / the plan to date
 }
 const contribution = (slot: unknown, month: string) => {
-  const total = monthRows.value.at(-1)?.cells[month]?.kt
-  const kt = cellOf(slot, month).kt
-  return kt == null || !total || total <= 0 ? null : kt / total
+  const total = monthRows.value.at(-1)?.cells[month]?.[basis.value]
+  const v = cellOf(slot, month)[basis.value]
+  return v == null || !total || total <= 0 ? null : v / total // the seller's PL2 CF / every seller's PL2 CF of the month
 }
 const doneColor = (v: number | null) => (v == null ? undefined : v >= 1 ? '#16a34a' : v < 0.85 ? '#dc2626' : undefined)
 const monthRowClass = ({ row }: { row: MonthRow }) => (row.total ? 'month-total' : '')
@@ -198,7 +203,7 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
         <el-table-column v-if="hasCf" label="PL2 CF" align="right" width="100" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
           <template #default="{ row }"><span class="num" :style="{ color: cfColor(cellOf(row, k).cf) }">{{ dash(cellOf(row, k).cf) }}</span></template>
         </el-table-column>
-        <el-table-column label="% HT theo KT*" align="right" width="92" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
+        <el-table-column :label="`% HT theo ${basisLabel}*`" align="right" width="92" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
           <template #default="{ row }"><span class="num font-semibold" :style="{ color: doneColor(doneOf(row, k)) }">{{ pct(doneOf(row, k), 1) }}</span></template>
         </el-table-column>
         <el-table-column v-if="showShare" label="Tỷ trọng đóng góp" align="right" width="96" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
@@ -207,8 +212,9 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
       </el-table-column>
     </el-table>
     <div class="mt-2 text-xs text-slate-400">
-      Kế hoạch = PL2 của tháng trong sheet kế hoạch seller. * % HT theo KT = PL2 KT / kế hoạch đến hết khoảng ngày đang chọn (tháng đã trọn thì là cả tháng).
-      Tỷ trọng đóng góp = PL2 KT của seller / tổng PL2 KT của mọi seller trong tháng. PL2 CF là số tài chính ghi theo tháng. Tháng ngoài khoảng ngày chỉ có kế hoạch (—).
+      Kế hoạch = PL2 của tháng trong sheet kế hoạch seller. * % HT theo {{ basisLabel }} = PL2 {{ basisLabel }} / kế hoạch đến hết khoảng ngày đang chọn (tháng đã trọn thì là cả tháng).
+      Tỷ trọng đóng góp = PL2 {{ basisLabel }} của seller / tổng PL2 {{ basisLabel }} của mọi seller trong tháng. Cả hai tính theo PL2 CF, số tài chính ghi theo tháng
+      (tính theo PL2 KT khi chưa có CF), nên so với kế hoạch đến hết khoảng ngày chỉ sát khi khoảng ngày bắt đầu từ đầu tháng. Tháng ngoài khoảng ngày chỉ có kế hoạch (—).
     </div>
 
     <el-dialog v-model="open" :title="`Seller ${picked?.seller ?? ''}`" width="min(1040px, 96vw)">
