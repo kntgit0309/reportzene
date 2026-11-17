@@ -163,12 +163,15 @@ export type Pl2Accounts = {
 export type Pl2SellerMonth = {
   month: string; plan: number | null; plan_to_date: number | null; quantity: number | null; kt: number | null; cf: number | null
 }
+/** A seller's pieces and PL2 KT of one plan product, in all and per month (a month without sales has no entry) */
+export type Pl2SellerProduct = { name: string; quantity: number; kt: number; months: Record<string, { quantity: number; kt: number }> }
 export type Pl2SellerLine = {
   seller: string; sellers: string[] // the name in the sheets, and the trackingis seller(s) on that row
   in_plan: boolean; quantity: number
   plan: number | null; kt: number | null; cf: number | null
   plan_total: number | null // the plan's months added up (KH quý)
   months: Pl2SellerMonth[]
+  products: Pl2SellerProduct[]
   kt_gap: number | null; kt_pct: number | null; cf_gap: number | null; cf_pct: number | null; cf_minus_kt: number | null
 }
 export type Pl2Sellers = {

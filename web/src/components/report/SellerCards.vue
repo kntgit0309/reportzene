@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { money, num, pct } from '../../lib/format'
+import { money, moneyRound, num, pct } from '../../lib/format'
 import { cfColor, gapColor, signedMoney } from '../../lib/plan'
-import type { Pl2SellerLine, Pl2SellerMonth, Pl2Sellers } from '../../lib/types'
+import type { Pl2SellerLine, Pl2SellerMonth, Pl2SellerProduct, Pl2Sellers } from '../../lib/types'
 
 // Etsy › Report › PL2 by seller: one card per seller of the plan (PL2 KT, progress against the quarter's plan with a mark at the
 // plan to date), a card for the other sellers, and a click opens the seller's PL2 per month.
@@ -46,6 +46,27 @@ const rows = computed<Row[]>(() => {
 })
 const rowClass = ({ rowIndex, row }: { rowIndex: number; row: Row }) => (row.total ? 'month-total' : `month-${rowIndex % 3}`)
 const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
+
+// per product: pieces and PL2 KT in each month, as the plan's products in the plan's order (only KT: the plan has no product per seller)
+type ProductRow = { name: string; product?: Pl2SellerProduct; total?: boolean }
+const productRows = computed<ProductRow[]>(() => {
+  const s = picked.value
+  if (!s || !s.products.length) return []
+  return [...s.products.map((product) => ({ name: product.name, product })), { name: 'Tổng', total: true }]
+})
+const productRowClass = ({ row }: { row: ProductRow }) => (row.total ? 'month-total' : '')
+// a month the range does not touch has no figures (null); a touched month without sales is 0
+function cell(slot: unknown, month: Pl2SellerMonth): { quantity: number; kt: number } | null {
+  const row = slot as ProductRow // the table's slot row is untyped
+  if (month.kt == null) return null
+  if (row.total) return { quantity: month.quantity ?? 0, kt: month.kt }
+  return row.product?.months[month.month] ?? { quantity: 0, kt: 0 }
+}
+function overall(slot: unknown): { quantity: number; kt: number } {
+  const row = slot as ProductRow
+  return row.total ? { quantity: picked.value?.quantity ?? 0, kt: picked.value?.kt ?? 0 } : { quantity: row.product?.quantity ?? 0, kt: row.product?.kt ?? 0 }
+}
+const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
 </script>
 
 <template>
@@ -85,7 +106,7 @@ const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
       </div>
     </div>
 
-    <el-dialog v-model="open" :title="`Seller ${picked?.seller ?? ''}`" width="min(820px, 94vw)">
+    <el-dialog v-model="open" :title="`Seller ${picked?.seller ?? ''}`" width="min(1040px, 96vw)">
       <template v-if="picked">
         <div class="mb-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-slate-600">
           <span>Thực đạt <b class="text-slate-900">{{ money(picked.kt) }}</b> · {{ num(picked.quantity) }} pcs</span>
@@ -93,6 +114,7 @@ const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
           <span>KH lũy kế <b class="text-slate-900">{{ money(picked.plan) }}</b></span>
           <b :style="{ color: gapColor(picked.kt_gap) }">{{ pct(picked.kt_pct, 1) }}</b>
         </div>
+        <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Theo tháng</div>
         <el-table :data="rows" :row-class-name="rowClass" size="small" class="w-full">
           <el-table-column prop="label" label="" width="90"><template #default="{ row }"><b>{{ row.label }}</b></template></el-table-column>
           <el-table-column label="Kế hoạch" align="right"><template #default="{ row }"><span class="num">{{ dash(row.plan) }}</span></template></el-table-column>
@@ -117,6 +139,31 @@ const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
             </template>
           </el-table-column>
         </el-table>
+        <template v-if="productRows.length && hasKt">
+          <div class="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Theo product <span class="font-normal normal-case tracking-normal text-slate-400">· số KT: sales (pcs) và PL2 theo KT</span>
+          </div>
+          <el-table :data="productRows" :row-class-name="productRowClass" size="small" class="w-full" border>
+            <el-table-column prop="name" label="Product" min-width="170"><template #default="{ row }"><b>{{ row.name }}</b></template></el-table-column>
+            <el-table-column v-for="(m, i) in picked.months" :key="m.month" :label="`Tháng ${Number(m.month.slice(0, 2))}`" align="center"
+                             :label-class-name="`mh-${i % 3}`">
+              <el-table-column label="Sales" align="right" width="76" :label-class-name="`mh-${i % 3}`">
+                <template #default="{ row }"><span class="num" :class="muted(cell(row, m)?.quantity)">{{ cell(row, m) ? num(cell(row, m)!.quantity) : '—' }}</span></template>
+              </el-table-column>
+              <el-table-column label="PL2 KT" align="right" width="96" :label-class-name="`mh-${i % 3}`">
+                <template #default="{ row }"><span class="num font-semibold" :class="muted(cell(row, m)?.kt)">{{ cell(row, m) ? moneyRound(cell(row, m)!.kt) : '—' }}</span></template>
+              </el-table-column>
+            </el-table-column>
+            <el-table-column label="Tổng" align="center" label-class-name="mh-total">
+              <el-table-column label="Sales" align="right" width="76" label-class-name="mh-total">
+                <template #default="{ row }"><span class="num" :class="muted(overall(row).quantity)">{{ num(overall(row).quantity) }}</span></template>
+              </el-table-column>
+              <el-table-column label="PL2 KT" align="right" width="96" label-class-name="mh-total">
+                <template #default="{ row }"><span class="num font-semibold" :class="muted(overall(row).kt)">{{ moneyRound(overall(row).kt) }}</span></template>
+              </el-table-column>
+            </el-table-column>
+          </el-table>
+        </template>
         <div class="mt-2 text-xs text-slate-400">
           Kế hoạch = PL2 của tháng trong sheet kế hoạch seller; KH LK = kế hoạch đến hết khoảng ngày đang chọn (tháng lẻ theo ngày). Thực đạt = PL2 KT
           của các ngày trong khoảng; tháng ngoài khoảng ngày không có số (—). PL2 CF là số tài chính ghi theo tháng, tính trọn các tháng mà khoảng ngày chạm tới.
@@ -139,6 +186,10 @@ const dash = (v: number | null | undefined) => (v == null ? '—' : money(v))
 .seller-card__rows { margin: 0; display: grid; gap: 2px; font-size: 12px; color: var(--el-text-color-secondary); }
 .seller-card__rows > div { display: flex; justify-content: space-between; }
 .seller-card__rows dt, .seller-card__rows dd { margin: 0; }
+:deep(th.mh-0) { color: #1d4ed8 !important; background: #eaf1ff !important; }
+:deep(th.mh-1) { color: #15803d !important; background: #e8f8ee !important; }
+:deep(th.mh-2) { color: #c2410c !important; background: #fff4e5 !important; }
+:deep(th.mh-total) { color: #0f172a !important; background: #eef1f6 !important; }
 .seller-card__rows dd { color: var(--el-text-color-regular); font-weight: 600; font-variant-numeric: tabular-nums; }
 :deep(.month-0 td:first-child) { border-left: 4px solid #2563eb; }
 :deep(.month-1 td:first-child) { border-left: 4px solid #16a34a; }
