@@ -7,6 +7,7 @@ from app.core.errors import AppError
 from app.models import SheetSource
 from app.services import report, trackingis
 from app.services import account_plan
+from app.services.lark_sheets import unique_header
 from app.services.pl2_accounts import parse, parse_account_list
 from tests.test_ornament_plan import HEADER as KH_HEADER  # KH Ornament shops: PunGanterdesign, Daisyfloralsshop, OnebyHenry
 from tests.test_ornament_plan import ROWS as KH_ROWS
@@ -196,7 +197,7 @@ def test_the_account_plan_layout_errors_name_what_is_missing():
     with pytest.raises(AppError) as err:  # the tab of the other plans: no PL2 theo KT / CF blocks
         account_plan.parse(["Shop Name", "Team", "10-2026"], [{"Shop Name": "A", "Team": "Etsy 1", "10-2026": "5"}])
     assert err.value.code == "ACCOUNT_PLAN_LAYOUT" and "PL2 theo KT" in err.value.message
-    assert "that row reads: Shop Name | Team | 10-2026" in err.value.message and "Header row" in err.value.message  # what it read, and the fix
+    assert "that row reads: A: Shop Name | B: Team | C: 10-2026" in err.value.message and "Header row" in err.value.message  # what it read, and the fix
     no_names = [{k: ("Name" if v == "Shop Name" else v) for k, v in r.items()} for r in KH_ACC_ROWS]
     with pytest.raises(AppError) as err:
         account_plan.parse(KH_ACC_HEADER, no_names)
@@ -317,3 +318,57 @@ def test_an_account_card_opens_onto_its_product_types_through_the_shops_filter(c
     assert [p["name"] for p in data["products"]] == ["Ornament", "Blanket", "Shirt"]
     ornament = {g["name"]: g for g in data["products"][0]["children"]}
     assert ornament["Acrylic + Wood"]["quantity"] == 8 and [c["name"] for c in ornament["Acrylic + Wood"]["children"]] == ["Cutout Ornament", "Ornament"]
+
+
+# "KHKD quý 4/2026 theo acc": the label row itself reads "Seller | Account | Quý IV | PL2 T10 | PL2 T11 | PL2 T12" in A–F (a plan
+# of its own), then the PL2 theo KT plan over P–S and the PL2 theo CF plan over X–AA with the same labels; no "PL2 theo KT" title
+LABELLED = {0: "Seller", 1: "Account", 2: "Quý IV", 3: "PL2 T10", 4: "PL2 T11", 5: "PL2 T12", 15: "Quý IV", 16: "PL2 T10", 17: "PL2 T11",
+            18: "PL2 T12", 23: "Quý IV", 24: "PL2 T10", 25: "PL2 T11", 26: "PL2 T12"}
+LABELLED_HEADER = unique_header([LABELLED.get(j, "") for j in range(28)])
+
+
+def _labelled(seller: str, account: str, first: tuple, kt: tuple, cf: tuple) -> dict[str, str]:
+    cells = {0: seller, 1: account, **{2 + i: str(v) for i, v in enumerate(first)}, **{15 + i: str(v) for i, v in enumerate(kt)},
+             **{23 + i: str(v) for i, v in enumerate(cf)}}
+    return {h: cells.get(j, "") for j, h in enumerate(LABELLED_HEADER)}
+
+
+LABELLED_ROWS = [
+    _labelled("Mai VTT", "PunGanterdesign", (999, 333, 333, 333), ("$9,300", "$3,100", "$3,100", "$3,100"), ("$18,600", "$6,200", "$6,200", "$6,200")),
+    _labelled("Linh PT", "Daisyfloralsshop", (888, 296, 296, 296), ("$4,650", "$1,550", "$1,550", "$1,550"), ("$0", "$0", "$0", "$0")),
+    _labelled("Vy LNY", "PunGanterdesign", (1, 1, 1, 1), ("$3,000", "$1,000", "$1,000", "$1,000"), ("", "", "", "")),  # another seller of the account
+    _labelled("", "Tổng", (7, 7, 7, 7), ("$99,999", "$99,999", "$99,999", "$99,999"), ("$99,999", "$99,999", "$99,999", "$99,999")),
+    _labelled("Anh NTM", "", (5, 5, 5, 5), ("$5", "$5", "$5", "$5"), ("$5", "$5", "$5", "$5")),  # no account
+]
+
+
+def test_the_plan_is_read_from_columns_p_to_s_when_the_labels_are_pl2_t10_t11_t12():
+    got = account_plan.parse(LABELLED_HEADER, LABELLED_ROWS, lambda m: "2026")
+    assert got["months"] == {"kt": ["10-2026", "11-2026", "12-2026"], "cf": ["10-2026", "11-2026", "12-2026"]}
+    by_shop = {a["shop"]: a for a in got["accounts"]}
+    assert list(by_shop) == ["PunGanterdesign", "Daisyfloralsshop"]  # no Tổng row, no row without an account
+    pun = by_shop["PunGanterdesign"]
+    # the block over P–S, not the one over C–F; the "Quý IV" column is not a month; two sellers' rows of the account are added up
+    assert pun["kt"] == {"10-2026": 4100, "11-2026": 4100, "12-2026": 4100} and pun["cf"] == {"10-2026": 6200, "11-2026": 6200, "12-2026": 6200}
+    assert by_shop["Daisyfloralsshop"]["cf"]["10-2026"] == 0 and by_shop["Daisyfloralsshop"]["team"] == ""
+    # without a block over P–S the tab is not read (a block of C–F alone is not the PL2 theo KT plan)
+    only_first = [{h: (v if j < 8 else "") for j, (h, v) in enumerate(r.items())} for r in LABELLED_ROWS]
+    header = unique_header([LABELLED.get(j, "") if j < 8 else "" for j in range(28)])
+    only_first = [dict(zip(header, r.values(), strict=True)) for r in only_first]
+    with pytest.raises(AppError) as err:
+        account_plan.parse(header, only_first, lambda m: "2026")
+    assert "A: Seller | B: Account | C: Quý IV" in err.value.message
+
+
+def test_the_report_reads_the_labelled_plan_with_its_own_year(client, db_factory, admin, member, upstream, sheets):
+    with db_factory() as s:
+        sheet = SheetSource(name="KHKD quý 4/2026 theo acc", url="https://x.larksuite.com/sheets/AbCdEfGhIjKl", tab_title="KH theo Acc",
+                            header=LABELLED_HEADER, rows=LABELLED_ROWS, row_count=len(LABELLED_ROWS))
+        s.add(sheet)
+        s.commit()
+    client.put("/api/v1/settings", json={"account_plan_sheet_id": sheet.id}, headers=admin)
+    data = client.get(A, headers=member).json()["data"]  # 01–19/10/2026
+    assert "error" not in data["kh_pl2"] and data["kh_pl2"]["months"]["kt"] == ["10-2026", "11-2026", "12-2026"]
+    pun = next(a for a in data["accounts"] if a["shop"] == "PunGanterdesign")
+    assert pun["kt_plan_total"] == 3 * 4100 and pun["cf_plan_total"] == 3 * 6200
+    assert pun["months"][0]["kt_plan_to_date"] == round(4100 * 19 / 31, 2) and pun["months"][0]["cf_plan_to_date"] == round(6200 * 19 / 31, 2)
