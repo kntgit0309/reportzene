@@ -256,6 +256,9 @@ def by_type(monkeypatch):
     oct_, nov = {"Cutout Ornament": 5, "Ornament": 3, "Shell ornament": 2, "Blanket": 4, "Shirt": 7}, {"Cutout Ornament": 1, "Woven Blanket": 2}
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if "/filter/" in req.url.path:  # the filter lists, when a test does not stub them
+            names = SUBS if req.url.path.endswith("/filter/sub-product-type") else []
+            return httpx.Response(200, json={"success": True, "data": [{"value": n, "label": n} for n in names]})
         query = parse_qs(urlparse(str(req.url)).query)
         asked.append(query)
         sold = oct_ if query["from"][0].startswith("2026-10") else nov

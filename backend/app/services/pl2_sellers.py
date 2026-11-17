@@ -24,10 +24,8 @@ products last): the seller's pieces and PL2 KT in all and per month, for the dia
 grouping on the product's page: Ornament → Acrylic + Wood, Shell, Shaker…) and sub product types, with the same pieces and PL2 KT
 per month. It is asked when a seller card is opened: one trackingis query per month the range touches.
 """
-import calendar
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from datetime import date
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -43,15 +41,7 @@ NO_SELLER = "(no seller)"
 FILTERED = "PL2 plan and CF are per seller across all stores: clear the store, team, designer and keyword filters to compare with them"
 
 
-def _spans(q: ReportQuery) -> list[tuple[str, str, str]]:
-    """(MM-YYYY, from, to) of each month the range touches, the range clipped to that month."""
-    start, end = date.fromisoformat(q.date_from), date.fromisoformat(q.date_to)
-    out = []
-    for month in family_plan.month_days(q.date_from, q.date_to):
-        first = date(int(month[3:]), int(month[:2]), 1)
-        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
-        out.append((month, max(start, first).isoformat(), min(end, last).isoformat()))
-    return out
+_spans = family_report.spans  # the months of the range, each with its own days
 
 
 def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery) -> dict[str, list[list[dict[str, Any]]]]:

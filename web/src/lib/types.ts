@@ -140,12 +140,20 @@ export type Pl2Report = {
 }
 
 /** PL2 per account: PL2 theo KT (quantity × the plan's PL2/item) and finance's PROFIT THỰC ĐẠT (PL2 theo CF); null = not available */
+/** An account's PL2 in one month (MM-YYYY): the month's plan on the KT and the CF basis, the plan to date over the range's days, pieces, KT and CF; null = not in the range */
+export type Pl2AccountMonth = {
+  month: string; kt_plan: number | null; cf_plan: number | null; kt_plan_to_date: number | null; cf_plan_to_date: number | null
+  quantity: number | null; kt: number | null; cf: number | null
+}
 export type Pl2AccountLine = {
   shop: string; team: string | null; quantity: number; kt: number | null; cf: number | null; cf_minus_kt: number | null
   plan?: number | null // KH plan to date (pieces) of the account, over the KH sheets planning per store
   // PL2 plan to date on the KT and on the CF basis ("KH theo Acc"), and KT / CF against it
   kt_plan?: number | null; kt_gap?: number | null; kt_pct?: number | null
   cf_plan?: number | null; cf_gap?: number | null; cf_pct?: number | null
+  kt_plan_total: number | null; cf_plan_total: number | null // the plan's months added up on each basis (KH quý)
+  months: Pl2AccountMonth[]; products: Pl2SellerProduct[]
+  shop_ids: string[] // the trackingis stores of the account, to open a product onto its product types
 }
 type SheetRef = { id: number; name: string; tab_title: string; last_synced_at: string | null }
 export type Pl2Accounts = {

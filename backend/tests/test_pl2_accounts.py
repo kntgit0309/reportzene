@@ -13,6 +13,7 @@ from tests.test_ornament_plan import ROWS as KH_ROWS
 from tests.test_plan import HEADER as PLAN_HEADER  # KHKD: Ornament $6, Blanket $8, Shirt $5.5 PL2/item
 from tests.test_plan import ROWS as PLAN_ROWS
 from tests.test_report import _save_token
+from tests.test_pl2_sellers import by_type  # noqa: F401  (fixture: fake trackingis product type view)
 from tests.test_seller_plan import seller_sheet  # noqa: F401  (fixture: seller plan sheet, sellers Linh PT.ETS and Khoa NT)
 
 A = "/api/v1/report/etsy/pl2/accounts?date_from=2026-10-01&date_to=2026-10-19"
@@ -264,3 +265,54 @@ def test_an_admin_filtered_by_seller_gets_the_plan_scaled_by_the_sellers_share(c
     assert pun["kt_plan"] == round(1900 * OCT_LINH, 2) and pun["kt_gap"] == round(pun["kt"] - 1900 * OCT_LINH, 2)
     assert pun["cf_plan"] is None and "seller" in data["cf"]["error"]  # CF is per account: the plan on its basis has nothing to meet
     assert "error" not in data["kh_pl2"]
+
+
+def test_each_account_has_its_plans_months_products_and_stores_for_the_cards(client, member, upstream, kh_theo_acc):
+    data = client.get(A, headers=member).json()["data"]  # 01–19/10
+    rows = {a["shop"]: a for a in data["accounts"]}
+    pun = rows["PunGanterdesign"]
+    assert pun["kt_plan_total"] == 3 * 3100 and pun["cf_plan_total"] == 3 * 6200  # KH quý on each basis: October + November + December
+    assert [m["month"] for m in pun["months"]] == ["10-2026", "11-2026", "12-2026"]
+    octo, nov, dec = pun["months"]
+    assert octo == {"month": "10-2026", "kt_plan": 3100, "cf_plan": 6200, "kt_plan_to_date": 1900, "cf_plan_to_date": 3800,
+                    "quantity": 30, "kt": 195, "cf": 8047.98}  # 19 of October's 31 days; finance's October
+    assert nov == {"month": "11-2026", "kt_plan": 3100, "cf_plan": 6200, "kt_plan_to_date": None, "cf_plan_to_date": None,
+                   "quantity": None, "kt": None, "cf": None} and dec["kt_plan"] == 3100 and dec["kt"] is None
+    assert [(p["name"], p["quantity"], p["kt"]) for p in pun["products"]] == [("Ornament", 10, 60.0), ("Blanket", 10, 80.0), ("Shirt", 10, 55.0)]
+    assert pun["products"][0]["months"] == {"10-2026": {"quantity": 10, "kt": 60.0}}
+    assert pun["shop_ids"] == ["0"] and rows["AuthenticJJ"]["shop_ids"] == ["2"]  # CuongCafCrochet's store, its sales counted as AuthenticJJ's
+    assert rows["Daisyfloralsshop"]["shop_ids"] == [] and rows["Daisyfloralsshop"]["months"][0]["quantity"] == 0  # no sales, still a card
+
+    others, total = data["others"], data["total"]
+    assert [m["month"] for m in others["months"]] == ["10-2026", "11-2026", "12-2026"] and others["products"] == []
+    assert others["months"][0]["kt"] == 97.5 and others["months"][0]["cf"] == 120.5 and others["months"][0]["kt_plan"] == 0  # outside the plan: $0
+    assert total["months"][0]["kt"] == total["kt"] and total["months"][0]["cf"] == total["cf"] and total["months"][0]["quantity"] == total["quantity"]
+    assert total["kt_plan_total"] == round(sum(r["kt_plan_total"] for r in data["accounts"]), 2)
+    assert total["months"][0]["kt_plan_to_date"] == total["kt_plan"]
+
+
+def test_a_range_over_two_months_asks_the_store_view_per_month(client, member, upstream, kh_theo_acc):
+    ASKED.clear()
+    data = client.get("/api/v1/report/etsy/pl2/accounts?date_from=2026-10-30&date_to=2026-11-02", headers=member).json()["data"]
+    assert len(ASKED) == 6  # three priced products, October's days and November's
+    pun = next(a for a in data["accounts"] if a["shop"] == "PunGanterdesign")
+    octo, nov, dec = pun["months"]
+    assert octo["quantity"] == nov["quantity"] == 30 and pun["quantity"] == 60  # the fake answers each query with the same pieces
+    assert octo["kt_plan_to_date"] == round(3100 * 2 / 31, 2) and nov["kt_plan_to_date"] == round(3100 * 2 / 30, 2) and dec["kt"] is None
+    assert pun["kt"] == round(octo["kt"] + nov["kt"], 2) and pun["kt_plan"] == round(octo["kt_plan_to_date"] + nov["kt_plan_to_date"], 2)
+
+
+def test_without_the_plan_sheet_the_months_have_no_plans(client, admin, member, upstream, sheets):
+    data = client.get(A, headers=member).json()["data"]
+    pun = next(a for a in data["accounts"] if a["shop"] == "PunGanterdesign")
+    assert [m["month"] for m in pun["months"]] == ["10-2026"] and pun["kt_plan_total"] is None and pun["cf_plan_total"] is None
+    assert pun["months"][0]["kt_plan"] is None and pun["months"][0]["kt"] == 195 and pun["months"][0]["cf"] == 8047.98
+
+
+def test_an_account_card_opens_onto_its_product_types_through_the_shops_filter(client, member, by_type, sheets):
+    T = "/api/v1/report/etsy/pl2/accounts/types?date_from=2026-10-30&date_to=2026-10-31&shops=0"
+    data = client.get(T, headers=member).json()["data"]
+    assert by_type and all(a["shops[]"] == ["0"] for a in by_type) and all(a["view"] == ["product_type"] for a in by_type)
+    assert [p["name"] for p in data["products"]] == ["Ornament", "Blanket", "Shirt"]
+    ornament = {g["name"]: g for g in data["products"][0]["children"]}
+    assert ornament["Acrylic + Wood"]["quantity"] == 8 and [c["name"] for c in ornament["Acrylic + Wood"]["children"]] == ["Cutout Ornament", "Ornament"]

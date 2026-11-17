@@ -62,6 +62,8 @@ const toQuery = (p: Record<string, string | number>) => '?' + new URLSearchParam
 export const fetchReport = (p: Record<string, string | number>) => api.get<ReportPage>(`/report/etsy${toQuery(p)}`).then((r) => r.data)
 export const fetchTotals = (p: Record<string, string | number>) => api.get<Totals>(`/report/etsy/totals${toQuery(p)}`).then((r) => r.data)
 export const fetchOverview = (p: Record<string, string | number>) => api.get<Overview>(`/report/etsy/overview${toQuery(p)}`).then((r) => r.data)
+export const fetchPl2AccountTypes = (p: Record<string, string | number>) =>
+  api.get<Pl2SellerTypes>(`/report/etsy/pl2/accounts/types${toQuery(p)}`).then((r) => r.data)
 export const fetchProductMonths = (p: Record<string, string | number>) =>
   api.get<ProductMonths>(`/report/etsy/overview/months${toQuery(p)}`).then((r) => r.data)
 export const fetchProductTypes = (p: Record<string, string | number>) =>

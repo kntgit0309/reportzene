@@ -6,8 +6,10 @@ seller / team filters as the report), run in parallel. An order holding several 
 so the overall total is its own query rather than the sum of the rows. The rest group of Others (every sub product type no
 family lists, dozens of them) opens onto trackingis product types instead: one product type view query.
 """
+import calendar
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import date
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -19,6 +21,17 @@ from app.services.trackingis import MAX_PER_PAGE, ReportQuery, TrackingisClient,
 
 WORKERS = 8
 DAY_FIELDS = ("date_at", "total_order", "total_quantity", "total_revenue")
+
+
+def spans(q: ReportQuery) -> list[tuple[str, str, str]]:
+    """(MM-YYYY, from, to) of each month the range touches, the range clipped to that month."""
+    start, end = date.fromisoformat(q.date_from), date.fromisoformat(q.date_to)
+    out = []
+    for month in family_plan.month_days(q.date_from, q.date_to):
+        first = date(int(month[3:]), int(month[:2]), 1)
+        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+        out.append((month, max(start, first).isoformat(), min(end, last).isoformat()))
+    return out
 
 
 def _only(q: ReportQuery, subs: tuple[str, ...]) -> ReportQuery:
