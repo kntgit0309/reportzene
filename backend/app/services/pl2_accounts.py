@@ -24,7 +24,7 @@ range, so the table and the totals are unchanged.
 """
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
@@ -136,7 +136,7 @@ def _cf(db: Session, q: ReportQuery) -> dict[str, Any]:
                                                       "months": parsed["months"], "warnings": parsed["warnings"]}}
 
 
-def _kh_pl2(db: Session) -> dict[str, Any]:
+def _kh_pl2(db: Session, year_of: Callable[[int], str] | None = None) -> dict[str, Any]:
     """{accounts: {name: {shop, team, kt: {month: $}, cf: {month: $}}}, months: {kt, cf}, sheet} of the account PL2 plan sheet
     ("KH theo Acc"), suspended stores replaced, or {"error"}."""
     rt = settings_store.runtime(db)
@@ -144,7 +144,7 @@ def _kh_pl2(db: Session) -> dict[str, Any]:
     if isinstance(got, str):
         return {"error": got}
     try:
-        parsed = account_plan.parse(got.header or [], got.rows)
+        parsed = account_plan.parse(got.header or [], got.rows, year_of)
     except AppError as exc:
         return {"error": exc.message}
     return {"accounts": account_plan.replace(parsed["accounts"], rt.account_replacements), "months": parsed["months"],
@@ -270,9 +270,10 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
     kh = _kh_accounts(db, q.date_from, q.date_to, factors)
 
     # the PL2 plan per account ("KH theo Acc"): not with filters that cut across stores (a seller's share scales it, as any plan)
-    plan = _kh_pl2(db)
-    plan_ok = "error" not in plan and (not narrowed or factors is not None)
     days = family_plan.month_days(q.date_from, q.date_to)
+    years = {int(m[:2]): m[3:] for m in days}  # a plan whose labels are "PL2 T10" has no year: the report's own
+    plan = _kh_pl2(db, lambda m: years.get(m, q.date_to[:4]))
+    plan_ok = "error" not in plan and (not narrowed or factors is not None)
 
     def plan_of(key: str, kind: str, on: bool) -> float | None:
         """The account's plan to date; an account the sheet does not list has $0 in the months it plans."""
