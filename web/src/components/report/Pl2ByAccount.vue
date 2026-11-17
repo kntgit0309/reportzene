@@ -85,11 +85,6 @@ const source = computed(() => {
   if (k?.sheet && !k.error) parts.push(`KH: ${k.sheet.name.trim()} · ${k.sheet.tab_title.trim()} · synced ${dateTime(k.sheet.last_synced_at)}`)
   return parts.join('   ')
 })
-// the plan alert says why there is no KH theo KT / CF; filters that cut across stores already got CF's note
-const planAlert = computed(() => {
-  const e = khPl2.value?.error
-  return e && e !== cf.value?.error && !auth.ownSalesOnly.value ? e : ''
-})
 const planMissing = computed(() => (khPl2.value?.missing?.length ? `The account PL2 plan sheet has no plan for ${khPl2.value.missing.join(', ')}` : ''))
 const title = computed(() => {
   if (!hasCf.value && !hasKtPlan.value && !hasCfPlan.value) return 'Sales and PL2 KT by account'
@@ -153,9 +148,6 @@ function exportCsv() {
       <el-alert v-if="data.kt.error" type="info" :closable="false" show-icon :title="data.kt.error" class="!my-3" />
       <el-alert v-if="!hasCf && !auth.ownSalesOnly.value" type="info" :closable="false" show-icon :title="cf?.error" class="!my-3">
         <RouterLink v-if="auth.isAdmin.value && cf?.error?.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
-      </el-alert>
-      <el-alert v-if="planAlert" type="info" :closable="false" show-icon :title="planAlert" class="!my-3">
-        <RouterLink v-if="auth.isAdmin.value && planAlert.includes('Settings')" to="/settings" class="text-[#2563eb]">Open Settings → Plan</RouterLink>
       </el-alert>
       <el-alert v-if="planMissing && (hasKtPlan || hasCfPlan)" type="warning" :closable="false" show-icon :title="planMissing" class="!my-3" />
       <el-alert v-for="w in cf?.warnings ?? []" :key="w" type="warning" :closable="false" show-icon :title="w" class="!my-3" />
