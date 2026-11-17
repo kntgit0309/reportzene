@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { auth } from '../../lib/auth'
 import { money, moneyRound, num, pct } from '../../lib/format'
 import { cfColor, gapColor, signedMoney } from '../../lib/plan'
 import { fetchPl2SellerTypes } from '../../lib/report'
 import type { Pl2SellerLine, Pl2SellerMonth, Pl2SellerNode, Pl2SellerProduct, Pl2SellerTypes, Pl2Sellers } from '../../lib/types'
 
 // Etsy › Report › PL2 by seller: one card per seller of the plan (PL2 KT, progress against the quarter's plan with a mark at the
-// plan to date), a card for the other sellers, and a click opens the seller's PL2 per month.
+// plan to date), a card for the other sellers, and a click opens the seller's PL2 per month. Under them, one table of every
+// seller's month: plan, PL2 KT, PL2 CF, % of the plan to date and the seller's share of the month's PL2 KT.
 const props = defineProps<{ data: Pl2Sellers; params: Record<string, string> }>()
 
 const LOW = 0.8 // below 80% of the plan to date the bar turns red
@@ -28,6 +30,46 @@ const share = (v: number | null | undefined, whole: number | null | undefined) =
   v == null || !whole || whole <= 0 ? 0 : Math.max(0, Math.min(100, (v / whole) * 100))
 const isLow = (s: Pl2SellerLine) => s.kt_pct != null && s.kt_pct < LOW
 const subtitle = (s: Pl2SellerLine) => (s.sellers.length && s.sellers.join(' + ') !== s.seller ? s.sellers.join(' + ') : '')
+
+// Theo tháng · từng seller: a row per seller of the plan, the other sellers together and the total, a group of columns per month
+type MonthCell = { plan: number | null; toDate: number | null; kt: number | null; cf: number | null }
+type MonthRow = { key: string; name: string; sub?: string; total?: boolean; cells: Record<string, MonthCell> }
+const monthKeys = computed(() => {
+  const keys = new Set<string>()
+  for (const s of props.data.sellers) for (const m of s.months) keys.add(m.month)
+  return [...keys].sort((a, b) => a.slice(3).localeCompare(b.slice(3)) || a.slice(0, 2).localeCompare(b.slice(0, 2)))
+})
+const addUp = (vals: (number | null)[]) => (vals.some((v) => v != null) ? vals.reduce<number>((t, v) => t + (v ?? 0), 0) : null)
+function cellsOf(rows: Pl2SellerLine[]): Record<string, MonthCell> {
+  const out: Record<string, MonthCell> = {}
+  for (const k of monthKeys.value) {
+    const ms = rows.map((r) => r.months.find((m) => m.month === k))
+    out[k] = { plan: addUp(ms.map((m) => m?.plan ?? null)), toDate: addUp(ms.map((m) => m?.plan_to_date ?? null)),
+               kt: addUp(ms.map((m) => m?.kt ?? null)), cf: addUp(ms.map((m) => m?.cf ?? null)) }
+  }
+  return out
+}
+const monthRows = computed<MonthRow[]>(() => {
+  const rest = props.data.sellers.filter((s) => !s.in_plan)
+  const rows: MonthRow[] = sellers.value.map((s) => ({ key: s.seller, name: s.seller, sub: subtitle(s), cells: cellsOf([s]) }))
+  if (rest.length) rows.push({ key: '_other', name: 'Seller khác', cells: cellsOf(rest) })
+  rows.push({ key: '_total', name: 'Tổng', total: true, cells: cellsOf(props.data.sellers) })
+  return rows
+})
+// the share of a month's PL2 KT needs every seller: a limited seller, or a report filtered by seller, only has theirs
+const showShare = computed(() => !auth.ownSalesOnly.value && !props.params.sellers)
+const cellOf = (slot: unknown, month: string): MonthCell => (slot as MonthRow).cells[month] ?? { plan: null, toDate: null, kt: null, cf: null }
+const doneOf = (slot: unknown, month: string) => {
+  const c = cellOf(slot, month)
+  return c.kt == null || !c.toDate ? null : c.kt / c.toDate // % HT theo KT: PL2 KT / the plan to date
+}
+const contribution = (slot: unknown, month: string) => {
+  const total = monthRows.value.at(-1)?.cells[month]?.kt
+  const kt = cellOf(slot, month).kt
+  return kt == null || !total || total <= 0 ? null : kt / total
+}
+const doneColor = (v: number | null) => (v == null ? undefined : v >= 1 ? '#16a34a' : v < 0.85 ? '#dc2626' : undefined)
+const monthRowClass = ({ row }: { row: MonthRow }) => (row.total ? 'month-total' : '')
 
 const open = ref(false)
 const picked = ref<Pl2SellerLine | null>(null)
@@ -138,6 +180,37 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
       </div>
     </div>
 
+    <div class="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Theo tháng <span class="font-normal normal-case tracking-normal text-slate-400">· từng seller</span></div>
+    <el-table :data="monthRows" row-key="key" :row-class-name="monthRowClass" size="small" border class="w-full">
+      <el-table-column label="Seller" min-width="170" fixed>
+        <template #default="{ row }">
+          <b v-if="row.total">{{ row.name }}</b>
+          <template v-else><span class="font-medium text-slate-800">{{ row.name }}</span> <span v-if="row.sub" class="text-xs text-slate-400">{{ row.sub }}</span></template>
+        </template>
+      </el-table-column>
+      <el-table-column v-for="(k, i) in monthKeys" :key="k" :label="`Tháng ${Number(k.slice(0, 2))}`" align="center" :label-class-name="`mh-${i % 3}`">
+        <el-table-column label="Kế hoạch" align="right" width="100" :class-name="`mt-${i % 3} mt-first`" :label-class-name="`mh-${i % 3}`">
+          <template #default="{ row }"><span class="num text-slate-600">{{ dash(cellOf(row, k).plan) }}</span></template>
+        </el-table-column>
+        <el-table-column label="PL2 KT" align="right" width="100" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
+          <template #default="{ row }"><span class="num font-semibold">{{ dash(cellOf(row, k).kt) }}</span></template>
+        </el-table-column>
+        <el-table-column v-if="hasCf" label="PL2 CF" align="right" width="100" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
+          <template #default="{ row }"><span class="num" :style="{ color: cfColor(cellOf(row, k).cf) }">{{ dash(cellOf(row, k).cf) }}</span></template>
+        </el-table-column>
+        <el-table-column label="% HT theo KT*" align="right" width="92" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
+          <template #default="{ row }"><span class="num font-semibold" :style="{ color: doneColor(doneOf(row, k)) }">{{ pct(doneOf(row, k), 1) }}</span></template>
+        </el-table-column>
+        <el-table-column v-if="showShare" label="Tỷ trọng đóng góp" align="right" width="96" :class-name="`mt-${i % 3}`" :label-class-name="`mh-${i % 3}`">
+          <template #default="{ row }"><span class="num text-slate-600">{{ pct(contribution(row, k), 1) }}</span></template>
+        </el-table-column>
+      </el-table-column>
+    </el-table>
+    <div class="mt-2 text-xs text-slate-400">
+      Kế hoạch = PL2 của tháng trong sheet kế hoạch seller. * % HT theo KT = PL2 KT / kế hoạch đến hết khoảng ngày đang chọn (tháng đã trọn thì là cả tháng).
+      Tỷ trọng đóng góp = PL2 KT của seller / tổng PL2 KT của mọi seller trong tháng. PL2 CF là số tài chính ghi theo tháng. Tháng ngoài khoảng ngày chỉ có kế hoạch (—).
+    </div>
+
     <el-dialog v-model="open" :title="`Seller ${picked?.seller ?? ''}`" width="min(1040px, 96vw)">
       <template v-if="picked">
         <div class="mb-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-slate-600">
@@ -230,5 +303,12 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
 :deep(.month-1 td:first-child) { border-left: 4px solid #16a34a; }
 :deep(.month-2 td:first-child) { border-left: 4px solid #ea580c; }
 :deep(.child-row td) { background: #fafbfd; }
+:deep(td.mt-0) { background: #f5f8ff; }
+:deep(td.mt-1) { background: #f1faf4; }
+:deep(td.mt-2) { background: #fffbea; }
+:deep(td.mt-first) { border-left: 3px solid; }
+:deep(td.mt-0.mt-first) { border-left-color: #2563eb; }
+:deep(td.mt-1.mt-first) { border-left-color: #16a34a; }
+:deep(td.mt-2.mt-first) { border-left-color: #ea580c; }
 :deep(.month-total td) { background: #f6f8fb !important; font-weight: 600; }
 </style>
