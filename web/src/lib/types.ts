@@ -165,6 +165,19 @@ export type Pl2SellerMonth = {
 }
 /** A seller's pieces and PL2 KT of one plan product, in all and per month (a month without sales has no entry) */
 export type Pl2SellerProduct = { name: string; quantity: number; kt: number; months: Record<string, { quantity: number; kt: number }> }
+/** A product's PL2 in one month (MM-YYYY): the month's plan, the plan to date over the range's days, pieces and PL2 KT; null = not in the range */
+export type ProductMonth = { month: string; plan: number | null; plan_to_date: number | null; quantity: number | null; kt: number | null }
+export type ProductMonthLine = {
+  name: string; page: string | null; in_plan: boolean; quantity: number; kt: number
+  plan: number | null; plan_total: number | null; kt_pct: number | null // the plan to date, the plan of the quarter (KH quý), and KT / plan to date
+  months: ProductMonth[]
+}
+export type ProductMonths = {
+  products: ProductMonthLine[]; total: ProductMonthLine | null
+  plan: { error?: string; sheet?: SheetRef; months?: string[]; missing?: string[]; scope?: string }
+  query: { date_from: string; date_to: string; teams: string[] }
+}
+export type ProductTypes = { name: string; children: Pl2SellerNode[]; months: string[] }
 /** One line of a seller's product tree: a product type or a sub product type, its pieces and PL2 KT in all and per month */
 export type Pl2SellerNode = { name: string; quantity: number; kt: number; months: Record<string, { quantity: number; kt: number }>; children?: Pl2SellerNode[] }
 export type Pl2SellerTypes = { products: { name: string; children: Pl2SellerNode[] }[]; months: string[] }
