@@ -70,6 +70,13 @@ def pl2_per_account(request: Request, db: Session = Depends(get_db), user: User 
     return ok(pl2_accounts.pl2_accounts(db, _params(request), user), request)
 
 
+@router.get("/pl2/accounts/types")
+def pl2_account_types(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Pieces and PL2 theo KT of the filtered stores (`shops`: ids of an account card) per product, product type and sub product
+    type, per month: the same tree as a seller card, on the stores filter."""
+    return ok(pl2_sellers.pl2_seller_types(db, _params(request), user), request)
+
+
 @router.get("/pl2/sellers")
 def pl2_per_seller(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """PL2 per seller: PL2 theo KT (quantity × PL2/item) next to the seller's PL2 plan to date and finance's PL2 theo CF."""

@@ -14,8 +14,16 @@ KH theo KT and KH theo CF (Settings › Plan › Account PL2 plan sheet, the "KH
 of each account on the KT and on the CF basis, each month pro rata of the report's days; the gaps are KT − KH theo KT and
 CF − KH theo CF. An account the sheet does not list has a plan of $0 (its whole PL2 is its gap), so the rows add up to the
 total; accounts of the sheet with a plan that no KH store sheet lists are rows of their own.
+
+For the account cards of Etsy › Report each account also carries `kt_plan_total` / `cf_plan_total` (the plan's months added up on
+each basis: "KH quý"), `months` (per month: the month's plan on each basis, the plan to date, pieces, PL2 KT and CF; a month the
+range does not touch has only its plans), `products` (its pieces and PL2 KT per product, in all and per month) and `shop_ids`
+(its trackingis stores, to open a product onto its product types with the `shops` filter of /report/etsy/pl2/sellers/types).
+The store view is asked once per product and month the range touches (the range clipped to that month); the months add up to the
+range, so the table and the totals are unchanged.
 """
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -165,19 +173,24 @@ def _kh_accounts(db: Session, date_from: str, date_to: str, factors: dict[str, f
     return list(seen.values())
 
 
-def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery) -> list[list[dict[str, Any]]]:
-    """The store view of each priced product (its sub product types only), in parallel."""
+def _fetch(client: TrackingisClient, lines: list[dict[str, Any]], q: ReportQuery) -> dict[str, list[list[dict[str, Any]]]]:
+    """Month → the store view of each priced product (its sub product types only) for the range's days of that month, in parallel."""
+    spans = family_report.spans(q)
     with ThreadPoolExecutor(max_workers=family_report.WORKERS) as pool:
-        futures = [pool.submit(family_accounts._stores, client, family_report._only(q, tuple(line["sub_types"]))) for line in lines]
+        futures = {(month, i): pool.submit(family_accounts._stores, client,
+                                           family_report._only(replace(q, date_from=a, date_to=b), tuple(line["sub_types"])))
+                   for month, a, b in spans for i, line in enumerate(lines)}
         try:
-            return [f.result() for f in futures]
+            return {month: [futures[(month, i)].result() for i in range(len(lines))] for month, _, _ in spans}
         except TrackingisError:
             pool.shutdown(cancel_futures=True)  # a refused token fails every query: don't send the ones still queued
             raise
 
 
 def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: float | None, plan: float | None = None,
-          kt_plan: float | None = None, cf_plan: float | None = None) -> dict[str, Any]:
+          kt_plan: float | None = None, cf_plan: float | None = None, kt_plan_total: float | None = None,
+          cf_plan_total: float | None = None, months: list[dict[str, Any]] | None = None, products: list[dict[str, Any]] | None = None,
+          shop_ids: list[str] | None = None) -> dict[str, Any]:
     """One row. plan = the KH plan to date in pieces; kt_plan / cf_plan = the PL2 plan to date on the KT / CF basis ($), and
     kt_gap = kt − kt_plan, kt_pct = kt / kt_plan (the same for cf)."""
     def gap(v: float | None, p: float | None) -> float | None:
@@ -192,7 +205,9 @@ def _line(name: str, team: str | None, quantity: int, kt: float | None, cf: floa
     return {"shop": name, "team": team, "quantity": quantity, "plan": None if plan is None else round(plan, 1),
             "kt": money(kt), "cf": money(cf), "cf_minus_kt": round(cf - kt, 2) if kt is not None and cf is not None else None,
             "kt_plan": money(kt_plan), "kt_gap": gap(kt, kt_plan), "kt_pct": ratio(kt, kt_plan),
-            "cf_plan": money(cf_plan), "cf_gap": gap(cf, cf_plan), "cf_pct": ratio(cf, cf_plan)}
+            "cf_plan": money(cf_plan), "cf_gap": gap(cf, cf_plan), "cf_pct": ratio(cf, cf_plan),
+            "kt_plan_total": money(kt_plan_total), "cf_plan_total": money(cf_plan_total), "months": months or [],
+            "products": products or [], "shop_ids": shop_ids or []}
 
 
 def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
@@ -208,24 +223,34 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
 
     lines = overview.priced_products(db, user)
     kt_info: dict[str, Any] = {} if lines else {"error": "No plan with PL2/item to estimate from: an admin picks the plan sheet in Settings → Plan"}
-    stores: dict[str, dict[str, Any]] = {}  # trackingis stores of the report's filters: quantity and KT
+    stores: dict[str, dict[str, Any]] = {}  # trackingis stores of the report's filters: quantity and KT, in all, per month and per product
     if lines:
         data = report._call(db, user, report._key("pl2_accounts", q), report.CACHE_TTL_S, lambda c: _fetch(c, lines, q))
-        for line, rows in zip(lines, data, strict=True):
-            for r in rows:
-                name = rename(r.get("shop_name"))
-                s = stores.setdefault(_key(name), {"name": name, "quantity": 0, "kt": 0.0})
-                pcs = int(r.get("total_quantity") or 0)
-                s["quantity"] += pcs
-                s["kt"] += pcs * line["rate"]
+        for month, per_line in data.items():
+            for line, rows in zip(lines, per_line, strict=True):
+                for r in rows:
+                    name = rename(r.get("shop_name"))
+                    s = stores.setdefault(_key(name), {"name": name, "quantity": 0, "kt": 0.0, "months": {}, "products": {}, "ids": []})
+                    pcs = int(r.get("total_quantity") or 0)
+                    s["quantity"] += pcs
+                    s["kt"] += pcs * line["rate"]
+                    for into in (s["months"].setdefault(month, {"quantity": 0, "kt": 0.0}),
+                                 s["products"].setdefault(line["name"], {}).setdefault(month, {"quantity": 0, "kt": 0.0})):
+                        into["quantity"] += pcs
+                        into["kt"] += pcs * line["rate"]
+                    if r.get("shop_id") is not None and str(r["shop_id"]) not in s["ids"]:
+                        s["ids"].append(str(r["shop_id"]))
 
     cf = _cf(db, q)
     in_range = set(family_plan.month_days(q.date_from, q.date_to))
     booked: dict[str, dict[str, Any]] = {}  # finance's accounts: CF of the months the range touches
     for a in cf.get("accounts", []):
         name = rename(a["name"])
-        b = booked.setdefault(_key(name), {"name": name, "team": a["team"], "cf": 0.0})
-        b["cf"] += sum(v for m, v in a["actual"].items() if m in in_range)
+        b = booked.setdefault(_key(name), {"name": name, "team": a["team"], "cf": 0.0, "months": {}})
+        for m, v in a["actual"].items():
+            if m in in_range:
+                b["cf"] += v
+                b["months"][m] = b["months"].get(m, 0.0) + v
 
     # the report's team / store filters narrow the accounts as they narrow the sales
     teams = q.lists.get("teams") or []
@@ -256,6 +281,65 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         line = plan["accounts"].get(key)
         return account_plan.to_date(line[kind] if line else {}, plan["months"][kind], days, factors)
 
+    plan_months = {kind: plan["months"][kind] for kind in account_plan.KINDS} if "error" not in plan else {kind: [] for kind in account_plan.KINDS}
+    keys = sorted({*plan_months["kt"], *plan_months["cf"], *days}, key=lambda m: (m[3:], m[:2]))  # the plan's months and the range's
+
+    def month_plan(key: str, kind: str, month: str) -> float | None:
+        """The account's PL2 plan of one whole month on the KT or CF basis (× the seller's share); $0 for an account the sheet does not list."""
+        if not plan_ok or month not in plan_months[kind]:
+            return None
+        factor = 1.0 if factors is None else factors.get(month)
+        if factor is None:
+            return None
+        line = plan["accounts"].get(key)
+        return (line[kind].get(month, 0.0) if line else 0.0) * factor
+
+    def plan_total(key: str, kind: str, on: bool) -> float | None:
+        """The plan of the quarter (KH quý) on one basis: the sheet's months added up."""
+        return sum(month_plan(key, kind, m) or 0.0 for m in plan_months[kind]) if plan_ok and on else None
+
+    def r2(v: float | None) -> float | None:
+        return None if v is None else round(v, 2)
+
+    def month_rows(key: str) -> list[dict[str, Any]]:
+        """The account's PL2 per month, over the plan's months and those the range touches: the month's plan on each basis, the plan
+        to date, pieces, KT and CF. A month the range does not touch has only its plans (the rest is None)."""
+        s, b = stores.get(key, {}), booked.get(key, {})
+        out = []
+        for month in keys:
+            touched = month in days
+            d, n = days.get(month, (0, 1))
+            kt_plan = month_plan(key, "kt", month) if has_kt else None
+            cf_plan = month_plan(key, "cf", month) if has_cf else None
+            sold = s.get("months", {}).get(month, {"quantity": 0, "kt": 0.0})
+            out.append({"month": month, "kt_plan": r2(kt_plan), "cf_plan": r2(cf_plan),
+                        "kt_plan_to_date": r2(kt_plan * d / n) if touched and kt_plan is not None else None,
+                        "cf_plan_to_date": r2(cf_plan * d / n) if touched and cf_plan is not None else None,
+                        "quantity": sold["quantity"] if touched and has_kt else None, "kt": r2(sold["kt"]) if touched and has_kt else None,
+                        "cf": r2(b.get("months", {}).get(month, 0.0)) if touched and has_cf else None})
+        return out
+
+    def product_rows(key: str) -> list[dict[str, Any]]:
+        """The account's pieces and PL2 KT per product of the plan, in all and per month (a month without sales has no entry)."""
+        out = []
+        for line in lines:
+            by_month = stores.get(key, {}).get("products", {}).get(line["name"], {})
+            out.append({"name": line["name"], "quantity": sum(m["quantity"] for m in by_month.values()),
+                        "kt": round(sum(m["kt"] for m in by_month.values()), 2),
+                        "months": {k: {"quantity": m["quantity"], "kt": round(m["kt"], 2)} for k, m in by_month.items()}})
+        return out
+
+    def sum_months(rows: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        """The months of several accounts added up (a field is None when none of them has it)."""
+        out = []
+        for i, month in enumerate(keys):
+            cell: dict[str, Any] = {"month": month}
+            for field in ("kt_plan", "cf_plan", "kt_plan_to_date", "cf_plan_to_date", "quantity", "kt", "cf"):
+                values = [r[i][field] for r in rows if r[i][field] is not None]
+                cell[field] = round(sum(values), 2) if values else None
+            out.append(cell)
+        return out
+
     if plan_ok:  # accounts of the plan sheet that no KH store sheet lists, with a plan for the range
         listed = {_key(a["name"]) for a in kh}
         for key, line in plan["accounts"].items():
@@ -271,9 +355,10 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         key = _key(a["name"])
         accounts.append(_line(a["name"], a["team"], s.get("quantity", 0), s.get("kt", 0.0) if has_kt else None,
                               b.get("cf", 0.0) if has_cf else None, a["plan"] if not narrowed or factors is not None else None,
-                              plan_of(key, "kt", has_kt), plan_of(key, "cf", has_cf)))
+                              plan_of(key, "kt", has_kt), plan_of(key, "cf", has_cf), plan_total(key, "kt", has_kt),
+                              plan_total(key, "cf", has_cf), month_rows(key), product_rows(key) if has_kt else None, s.get("ids")))
     planned = {_key(a["name"]) for a in kh}  # every account of the plans, whether the filters keep it or not
-    children = []
+    children, child_months = [], []
     for key in sorted(set(stores) | set(booked)):
         if key in planned:
             continue
@@ -285,18 +370,22 @@ def pl2_accounts(db: Session, params: dict[str, Any], user: User | None = None) 
         if round(kt, 2) or round(cf_value, 2):  # only accounts with a PL2
             children.append(_line(s.get("name") or b.get("name"), team, s.get("quantity", 0), kt if has_kt else None,
                                   cf_value if has_cf else None, kt_plan=plan_of(key, "kt", has_kt), cf_plan=plan_of(key, "cf", has_cf)))
+            child_months.append(month_rows(key))
     children.sort(key=lambda c: -abs(c["cf"] or c["kt"] or 0))
 
     def add(rows: list[dict[str, Any]], field: str, on: bool) -> float | None:
         return round(sum(r[field] or 0 for r in rows), 2) if on else None
 
     others = {**_line(OTHERS, None, sum(c["quantity"] for c in children), add(children, "kt", has_kt), add(children, "cf", has_cf),
-                      kt_plan=add(children, "kt_plan", plan_ok and has_kt), cf_plan=add(children, "cf_plan", plan_ok and has_cf)),
+                      kt_plan=add(children, "kt_plan", plan_ok and has_kt), cf_plan=add(children, "cf_plan", plan_ok and has_cf),
+                      months=sum_months(child_months) if child_months else None),
               "count": len(children), "children": children}
     everything = [*accounts, others]
     plans = [a["plan"] for a in accounts if a["plan"] is not None]
     total = _line("All accounts", None, sum(r["quantity"] for r in everything), add(everything, "kt", has_kt), add(everything, "cf", has_cf),
-                  sum(plans) if plans else None, add(everything, "kt_plan", plan_ok and has_kt), add(everything, "cf_plan", plan_ok and has_cf))
+                  sum(plans) if plans else None, add(everything, "kt_plan", plan_ok and has_kt), add(everything, "cf_plan", plan_ok and has_cf),
+                  add(everything, "kt_plan_total", plan_ok and has_kt), add(everything, "cf_plan_total", plan_ok and has_cf),
+                  sum_months([r["months"] for r in everything if r["months"]]) if any(r["months"] for r in everything) else None)
     if "error" in plan:
         kh_info: dict[str, Any] = {"error": plan["error"]}
     elif not plan_ok:  # same as CF's: one note for the filters that cut across stores
