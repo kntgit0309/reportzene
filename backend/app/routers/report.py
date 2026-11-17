@@ -8,7 +8,7 @@ from app.core.deps import current_user
 from app.core.responses import ok
 from app.db import get_db
 from app.models import User
-from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, pl2_sellers, report
+from app.services import family_accounts, family_report, overview, pl2_accounts, pl2_cf, pl2_sellers, product_months, report
 from app.services.families import FAMILIES
 
 router = APIRouter(prefix="/report/etsy", tags=["report"])
@@ -44,6 +44,18 @@ def options(request: Request, kind: str = Path(pattern=OPTION_KINDS), db: Sessio
 def product_overview(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Sales of each product of the business plan (Etsy › Plan) against its plan, same filters as the report (Etsy › Report)."""
     return ok(overview.overview(db, _params(request), user), request)
+
+
+@router.get("/overview/months")
+def product_month_cards(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """PL2 theo KT of each product of the plan next to its PL2 plan, per month (the product cards), same filters as the report."""
+    return ok(product_months.product_months(db, _params(request), user), request)
+
+
+@router.get("/overview/types")
+def product_type_tree(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """A product of the plan (`product`) opened onto its product types and sub product types, per month (a product card)."""
+    return ok(product_months.product_types(db, _params(request), user), request)
 
 
 @router.get("/pl2")

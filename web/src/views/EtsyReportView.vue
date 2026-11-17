@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 import PageHeader from '../components/PageHeader.vue'
 import Pl2ByAccount from '../components/report/Pl2ByAccount.vue'
 import Pl2BySeller from '../components/report/Pl2BySeller.vue'
+import ProductCards from '../components/report/ProductCards.vue'
 import Pl2Comparison from '../components/report/Pl2Comparison.vue'
 import ProductOverview from '../components/report/ProductOverview.vue'
 import ReportBreakdown from '../components/report/ReportBreakdown.vue'
@@ -31,6 +32,7 @@ const overview = ref<InstanceType<typeof ProductOverview> | null>(null)
 const pl2 = ref<InstanceType<typeof Pl2Comparison> | null>(null)
 const pl2Accounts = ref<InstanceType<typeof Pl2ByAccount> | null>(null)
 const pl2Sellers = ref<InstanceType<typeof Pl2BySeller> | null>(null)
+const productCards = ref<InstanceType<typeof ProductCards> | null>(null)
 const rows = ref<ReportRow[]>([]) // the page the breakdown shows, for the export
 const totals = ref<Totals | null>(null)
 const defaultTeams = ref<string[]>([])
@@ -101,7 +103,7 @@ onMounted(loadTotals)
 <template>
   <PageHeader :subtitle="subtitle">
     <template #actions>
-      <el-button :icon="Refresh" :loading="loadingTotals" @click="breakdown?.reload(); overview?.reload(); pl2?.reload(); pl2Accounts?.reload(); pl2Sellers?.reload(); loadTotals()">Refresh</el-button>
+      <el-button :icon="Refresh" :loading="loadingTotals" @click="breakdown?.reload(); overview?.reload(); productCards?.reload(); pl2?.reload(); pl2Accounts?.reload(); pl2Sellers?.reload(); loadTotals()">Refresh</el-button>
       <el-button type="success" plain :icon="Download" :disabled="!rows.length" @click="exportCsv">Export</el-button>
     </template>
   </PageHeader>
@@ -118,6 +120,8 @@ onMounted(loadTotals)
   </div>
 
   <ProductOverview ref="overview" :params="applied" />
+
+  <ProductCards ref="productCards" :params="applied" />
 
   <Pl2ByAccount ref="pl2Accounts" :params="applied" />
 
