@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -26,6 +26,12 @@ const filters = ref<Filters>(emptyFilters())
 if (typeof route.query.from === 'string' && typeof route.query.to === 'string') filters.value.dateRange = [route.query.from, route.query.to]
 const teamsTouched = ref(false)
 const applied = ref<Record<string, string>>(filterParams(filters.value, false))
+
+// the report is split in four parts: one tab each, the first one (Overview) is the page's default and is left out of the URL
+const TABS = [{ value: 'overview', label: 'Overview' }, { value: 'account', label: 'Account' }, { value: 'product', label: 'Product' },
+  { value: 'seller', label: 'Seller' }] as const
+type Tab = (typeof TABS)[number]['value']
+const tab = ref<Tab>(TABS.find((t) => t.value === route.query.tab)?.value ?? 'overview')
 
 const breakdown = ref<InstanceType<typeof ReportBreakdown> | null>(null)
 const overview = ref<InstanceType<typeof ProductOverview> | null>(null)
@@ -55,7 +61,14 @@ async function loadTotals() {
 }
 
 function syncUrl() {
-  router.replace({ query: { view: view.value === 'date' ? undefined : view.value, from: applied.value.date_from, to: applied.value.date_to } })
+  router.replace({ query: { tab: tab.value === 'overview' ? undefined : tab.value, view: view.value === 'date' ? undefined : view.value,
+    from: applied.value.date_from, to: applied.value.date_to } })
+}
+
+function onTabChange() {
+  syncUrl()
+  // charts built while their tab was hidden (or sized before the window changed) have no width yet: Highcharts reflows on resize
+  nextTick(() => window.dispatchEvent(new Event('resize')))
 }
 
 function apply() {
@@ -110,22 +123,46 @@ onMounted(loadTotals)
 
   <ReportFilters v-model="filters" v-model:teams-touched="teamsTouched" :default-teams="defaultTeams" @apply="apply" @reset="reset" />
 
-  <Pl2Comparison ref="pl2" :params="applied" />
+  <!-- The filters above apply to every part. Overview is always built (it feeds the filters' default teams and the export); the
+       others are built, and ask trackingis, the first time their tab is opened, then stay. -->
+  <el-tabs v-model="tab" class="report-tabs" @tab-change="onTabChange">
+    <el-tab-pane :label="TABS[0].label" :name="TABS[0].value">
+      <Pl2Comparison ref="pl2" :params="applied" />
 
-  <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-    <div v-for="k in kpis" :key="k.label" class="kpi">
-      <div class="kpi__label">{{ k.label }}</div>
-      <div class="kpi__value">{{ k.value }}</div>
-    </div>
-  </div>
+      <div v-loading="loadingTotals" class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <div v-for="k in kpis" :key="k.label" class="kpi">
+          <div class="kpi__label">{{ k.label }}</div>
+          <div class="kpi__value">{{ k.value }}</div>
+        </div>
+      </div>
 
-  <ProductOverview ref="overview" :params="applied" />
+      <ReportBreakdown ref="breakdown" :params="applied" :initial-view="initialView" @loaded="onLoaded" @view-change="onViewChange" />
+    </el-tab-pane>
 
-  <ProductCards ref="productCards" :params="applied" />
+    <el-tab-pane :label="TABS[1].label" :name="TABS[1].value" lazy>
+      <Pl2ByAccount ref="pl2Accounts" :params="applied" />
+    </el-tab-pane>
 
-  <Pl2ByAccount ref="pl2Accounts" :params="applied" />
+    <el-tab-pane :label="TABS[2].label" :name="TABS[2].value" lazy>
+      <ProductOverview ref="overview" :params="applied" />
 
-  <Pl2BySeller ref="pl2Sellers" :params="applied" />
+      <ProductCards ref="productCards" :params="applied" />
+    </el-tab-pane>
 
-  <ReportBreakdown ref="breakdown" :params="applied" :initial-view="initialView" @loaded="onLoaded" @view-change="onViewChange" />
+    <el-tab-pane :label="TABS[3].label" :name="TABS[3].value" lazy>
+      <Pl2BySeller ref="pl2Sellers" :params="applied" />
+    </el-tab-pane>
+  </el-tabs>
 </template>
+
+<style scoped>
+.report-tabs :deep(.el-tabs__header) {
+  margin-bottom: 14px;
+}
+.report-tabs :deep(.el-tabs__item) {
+  height: 44px;
+  padding: 0 22px;
+  font-size: 15px;
+  font-weight: 600;
+}
+</style>
