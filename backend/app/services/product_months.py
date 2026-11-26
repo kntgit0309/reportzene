@@ -12,6 +12,10 @@ a product: {month, plan, plan_to_date, quantity, kt}; a month the range does not
 
 `product_types` opens a product: its product types (the team's grouping on its page: Ornament → Acrylic + Wood, Shell…) and sub
 product types with pieces and PL2 KT per month, asked when a card is opened.
+
+`product_accounts` opens it the other way, per account: the stores that sold the product (a suspended store counts as its
+replacement, Settings › Plan) with pieces and PL2 KT per month, biggest first; the pieces added by hand belong to no account and
+are a line of their own, so the lines add up to the product's card.
 """
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -21,8 +25,9 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import User
-from app.services import family_plan, family_report, overview, plan, report, seller_plan
-from app.services.pl2_sellers import _children, _fetch_types, _spans
+from app.services import family_accounts, family_plan, family_report, overview, plan, report, seller_plan, settings_store
+from app.services.pl2_accounts import _key
+from app.services.pl2_sellers import _children, _fetch_types, _node, _spans
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
 
 
@@ -133,3 +138,55 @@ def product_types(db: Session, params: dict[str, Any], user: User | None = None)
             if sub.lower() in wanted:
                 sold.setdefault(sub.lower(), {})[month] = sold.get(sub.lower(), {}).get(month, 0) + pcs
     return {"name": line["name"], "children": _children(line, sold), "months": list(family_plan.month_days(q.date_from, q.date_to))}
+
+
+HAND = "Added by hand (no account)"
+
+
+def _fetch_stores(client: TrackingisClient, q: ReportQuery, subs: tuple[str, ...]) -> dict[str, list[dict[str, Any]]]:
+    """Month → the store view of the `subs` sub product types for the range's days of that month, in parallel."""
+    spans = _spans(q)
+    with ThreadPoolExecutor(max_workers=family_report.WORKERS) as pool:
+        futures = {month: pool.submit(family_accounts._stores, client, family_report._only(replace(q, date_from=a, date_to=b), subs))
+                   for month, a, b in spans}
+        try:
+            return {month: futures[month].result() for month, _, _ in spans}
+        except TrackingisError:
+            pool.shutdown(cancel_futures=True)
+            raise
+
+
+def product_accounts(db: Session, params: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+    """{name, children: [{name, quantity, kt, months: {MM-YYYY: {quantity, kt}}}], count, months}: the product `product` of the plan per
+    account (the report's filters apply: a seller's own report lists their accounts), biggest PL2 KT first, then the pieces added
+    by hand (Felt Ornament) that no account has."""
+    q = report.build_query(db, {**params, "view": "date"}, user)
+    name = str(params.get("product") or "").strip()
+    line = next((p for p in overview.priced_products(db, user) if p["name"].lower() == name.lower()), None)
+    if line is None:
+        raise AppError(404, "PRODUCT_NOT_FOUND", f'No product "{name}" in the plan')
+    to = {_key(old): new.strip() for old, new in settings_store.runtime(db).account_replacements}
+    subs = tuple(line["sub_types"])
+    data = report._call(db, user, report._key(f"product_accounts:{line['name']}", q), report.CACHE_TTL_S, lambda c: _fetch_stores(c, q, subs))
+
+    sold: dict[str, dict[str, Any]] = {}  # account → {name, months: {month: pieces}}
+    for month, rows in data.items():
+        for r in rows:
+            pcs = int(r.get("total_quantity") or 0)
+            if not pcs:
+                continue
+            shop = to.get(_key(r.get("shop_name"))) or str(r.get("shop_name") or "").strip() or "(no store name)"  # a suspended store: its replacement
+            account = sold.setdefault(_key(shop), {"name": shop, "months": {}})
+            account["months"][month] = account["months"].get(month, 0) + pcs
+    nodes = [_node(a["name"], ["_"], {"_": a["months"]}, line["rate"]) for a in sold.values()]
+    nodes.sort(key=lambda n: (-n["kt"], n["name"].lower()))
+
+    wanted = {s.lower() for s in subs}
+    by_hand: dict[str, int] = {}
+    for month, a, b in _spans(q):
+        pcs = sum(v for sub, v in overview._fixes(db, replace(q, date_from=a, date_to=b)).items() if sub.lower() in wanted)
+        if pcs:
+            by_hand[month] = pcs
+    if by_hand:
+        nodes.append(_node(HAND, ["_"], {"_": by_hand}, line["rate"]))
+    return {"name": line["name"], "children": nodes, "count": len(sold), "months": list(family_plan.month_days(q.date_from, q.date_to))}

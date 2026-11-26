@@ -58,6 +58,12 @@ def product_type_tree(request: Request, db: Session = Depends(get_db), user: Use
     return ok(product_months.product_types(db, _params(request), user), request)
 
 
+@router.get("/overview/accounts")
+def product_account_list(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """A product of the plan (`product`) per account that sold it, per month (a product card), same filters as the report."""
+    return ok(product_months.product_accounts(db, _params(request), user), request)
+
+
 @router.get("/pl2")
 def pl2_kt_vs_cf(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """PL2 per month: finance's plan / actual / gap (PL2 theo CF) next to the PL2 estimated from sales (PL2 theo KT)."""

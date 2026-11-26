@@ -186,6 +186,7 @@ export type ProductMonths = {
   query: { date_from: string; date_to: string; teams: string[] }
 }
 export type ProductTypes = { name: string; children: Pl2SellerNode[]; months: string[] }
+export type ProductAccounts = ProductTypes & { count: number } // the accounts that sold a product (the last line may be the pieces added by hand)
 /** One line of a seller's product tree: a product type or a sub product type, its pieces and PL2 KT in all and per month */
 export type Pl2SellerNode = { name: string; quantity: number; kt: number; months: Record<string, { quantity: number; kt: number }>; children?: Pl2SellerNode[] }
 export type Pl2SellerTypes = { products: { name: string; children: Pl2SellerNode[] }[]; months: string[] }

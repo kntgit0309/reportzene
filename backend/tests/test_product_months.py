@@ -115,3 +115,56 @@ def test_a_product_opens_onto_its_product_types_and_sub_types_with_the_pieces_ad
 def test_an_unknown_product_is_not_found(client, member, by_type, business_plan):  # noqa: F811
     res = client.get("/api/v1/report/etsy/overview/types?product=Nothing", headers=member)
     assert res.status_code == 404 and res.json()["meta"]["code"] == "PRODUCT_NOT_FOUND"
+
+
+@pytest.fixture()
+def by_store(monkeypatch):
+    """Fake trackingis: the store view (a row per store, pieces by month) and the sub product type list."""
+    asked: list[dict[str, list[str]]] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        query = parse_qs(urlparse(str(req.url)).query)
+        if req.url.path.endswith("/filter/sub-product-type"):
+            return httpx.Response(200, json={"success": True, "data": [{"value": n, "label": n} for n in TRACKINGIS_SUBS]})
+        asked.append(query)
+        if query["from"][0].startswith("2026-10"):
+            sold = [("Alpha Shop", 1, 10), ("Beta Shop", 2, 4), ("Old Shop", 3, 2)]  # Old Shop is suspended: Beta Shop takes over
+        else:
+            sold = [("Alpha Shop", 1, 1)]
+        rows = [{"shop_name": n, "shop_id": i, "total_order": k, "total_quantity": k, "total": 0, "sale_tax": 0, "total_revenue": 10.0 * k} for n, i, k in sold]
+        return httpx.Response(200, json={"success": True, "data": {"data": rows, "paging": {"current_page": 1, "per_page": 200,
+                                                                                              "total": len(rows), "last_page": 1}}})
+
+    monkeypatch.setattr(trackingis, "TEST_TRANSPORT", httpx.MockTransport(handler))
+    return asked
+
+
+A = "/api/v1/report/etsy/overview/accounts?date_from=2026-10-30&date_to=2026-11-02&product=Ornament"
+
+
+def test_a_product_opens_onto_the_accounts_that_sold_it_and_the_pieces_added_by_hand(client, admin, member, by_store, business_plan):  # noqa: F811
+    client.put("/api/v1/settings", json={"account_replacements": [{"suspended": "Old Shop", "replacement": "Beta Shop"}]}, headers=admin)
+    data = client.get(A, headers=member).json()["data"]
+    assert data["name"] == "Ornament" and data["months"] == ["10-2026", "11-2026"] and data["count"] == 2  # two accounts, not the hand line
+    assert sorted(a["from"][0] for a in by_store) == ["2026-10-30", "2026-11-01"] and all(a["view"] == ["store"] for a in by_store)
+    fixes = FAMILIES["ornament"].quantity_fixes["Felt Ornament"]
+    by_hand = sum(fixes[d] for d in ("2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"))
+    assert by_hand > 0
+    alpha, beta, hand = data["children"]  # biggest PL2 KT first, the pieces added by hand last
+    assert (alpha["name"], alpha["quantity"], alpha["kt"]) == ("Alpha Shop", 11, 66.0)  # 10 in October and 1 in November, at $6
+    assert alpha["months"] == {"10-2026": {"quantity": 10, "kt": 60.0}, "11-2026": {"quantity": 1, "kt": 6.0}}
+    assert (beta["name"], beta["quantity"], beta["kt"]) == ("Beta Shop", 6, 36.0)  # its own 4 and the suspended Old Shop's 2: one account
+    assert hand["name"] == "Added by hand (no account)" and hand["quantity"] == by_hand and hand["kt"] == by_hand * 6.0
+    assert sum(c["quantity"] for c in data["children"]) == 11 + 6 + by_hand  # the lines add up to the product card
+
+
+def test_an_unknown_product_has_no_accounts(client, member, by_store, business_plan):  # noqa: F811
+    res = client.get("/api/v1/report/etsy/overview/accounts?product=Nothing", headers=member)
+    assert res.status_code == 404 and res.json()["meta"]["code"] == "PRODUCT_NOT_FOUND"
+
+
+def test_a_limited_seller_only_gets_the_accounts_of_their_own_sales(client, admin, member, by_store, business_plan):  # noqa: F811
+    me = client.get("/api/v1/auth/me", headers=member).json()["data"]
+    client.patch(f"/api/v1/users/{me['id']}", json={"scope_sellers": ["41"]}, headers=admin)
+    client.get(f"{A}&sellers=43", headers=member)  # Huyền's id
+    assert by_store and all(a["sellers[]"] == ["41"] for a in by_store)  # forced to hers, whatever the card asks

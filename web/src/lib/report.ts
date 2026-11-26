@@ -1,6 +1,6 @@
 // Report Etsy: filters → query string for /report/etsy, date shortcuts, CSV export.
 import { api } from './api'
-import type { FamilyAccountsReport, FamilyKey, FamilyReport, Filters, Option, Overview, Pl2Accounts, Pl2Report, Pl2SellerTypes, Pl2Sellers, ProductMonths, ProductTypes, ReportPage, ReportRow, Totals, View } from './types'
+import type { FamilyAccountsReport, FamilyKey, FamilyReport, Filters, Option, Overview, Pl2Accounts, Pl2Report, Pl2SellerTypes, Pl2Sellers, ProductAccounts, ProductMonths, ProductTypes, ReportPage, ReportRow, Totals, View } from './types'
 
 export const VIEWS: { value: View; label: string }[] = [
   { value: 'date', label: 'Date' },
@@ -68,6 +68,8 @@ export const fetchProductMonths = (p: Record<string, string | number>) =>
   api.get<ProductMonths>(`/report/etsy/overview/months${toQuery(p)}`).then((r) => r.data)
 export const fetchProductTypes = (p: Record<string, string | number>) =>
   api.get<ProductTypes>(`/report/etsy/overview/types${toQuery(p)}`).then((r) => r.data)
+export const fetchProductAccounts = (p: Record<string, string | number>) =>
+  api.get<ProductAccounts>(`/report/etsy/overview/accounts${toQuery(p)}`).then((r) => r.data)
 export const fetchPl2 = (p: Record<string, string | number>) => api.get<Pl2Report>(`/report/etsy/pl2${toQuery(p)}`).then((r) => r.data)
 export const fetchPl2Accounts = (p: Record<string, string | number>) =>
   api.get<Pl2Accounts>(`/report/etsy/pl2/accounts${toQuery(p)}`).then((r) => r.data)
