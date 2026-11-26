@@ -4,11 +4,11 @@ import { ElMessage } from 'element-plus'
 import { auth } from '../../lib/auth'
 import { dateTime, money, moneyRound, num, pct } from '../../lib/format'
 import { gapColor, signedMoney } from '../../lib/plan'
-import { fetchProductMonths, fetchProductTypes } from '../../lib/report'
-import type { Pl2SellerNode, ProductMonth, ProductMonthLine, ProductMonths, ProductTypes } from '../../lib/types'
+import { fetchProductAccounts, fetchProductMonths, fetchProductTypes } from '../../lib/report'
+import type { Pl2SellerNode, ProductAccounts, ProductMonth, ProductMonthLine, ProductMonths, ProductTypes } from '../../lib/types'
 
 // Etsy › Report: one card per product of the business plan (PL2 KT, progress against the quarter's plan with a mark at the plan to
-// date), a click opens the product's PL2 per month and its product types; under the cards, one table of every product's month:
+// date), a click opens the product's PL2 per month, its product types and its accounts; under the cards, one table of every product's month:
 // plan, PL2 KT, % of the plan to date and the product's share of the month's PL2 KT. The same as the seller cards.
 const props = defineProps<{ params: Record<string, string> }>()
 const data = ref<ProductMonths | null>(null)
@@ -69,26 +69,38 @@ const contribution = (slot: unknown, month: string) => {
 const doneColor = (v: number | null) => (v == null ? undefined : v >= 1 ? '#16a34a' : v < 0.85 ? '#dc2626' : undefined)
 const monthRowClass = ({ row }: { row: MonthRow }) => (row.total ? 'month-total' : '')
 
-// the dialog of a card: the product's months, and its product types and sub product types, asked when the card is opened
+// the dialog of a card: the product's months, its product types and sub product types, and its accounts, asked when the card is opened
 const open = ref(false)
 const picked = ref<ProductMonthLine | null>(null)
 const details = ref<ProductTypes | null>(null)
 const detailsLoading = ref(false)
+const accounts = ref<ProductAccounts | null>(null)
+const accountsLoading = ref(false)
 let ticket = 0
 async function show(p: ProductMonthLine) {
   picked.value = p
   details.value = null
+  accounts.value = null
   open.value = true
   const mine = ++ticket
   detailsLoading.value = true
-  try {
-    const got = await fetchProductTypes({ ...props.params, product: p.name })
-    if (mine === ticket) details.value = got
-  } catch (e) {
-    if (mine === ticket) ElMessage.error((e as Error).message)
-  } finally {
-    if (mine === ticket) detailsLoading.value = false
+  accountsLoading.value = true
+  const query = { ...props.params, product: p.name }
+  // two asks side by side: one failing leaves the other table
+  const run = async <T,>(fetch: () => Promise<T>, into: (v: T) => void, done: () => void) => {
+    try {
+      const got = await fetch()
+      if (mine === ticket) into(got)
+    } catch (e) {
+      if (mine === ticket) ElMessage.error((e as Error).message)
+    } finally {
+      if (mine === ticket) done()
+    }
   }
+  await Promise.all([
+    run(() => fetchProductTypes(query), (v) => (details.value = v), () => (detailsLoading.value = false)),
+    run(() => fetchProductAccounts(query), (v) => (accounts.value = v), () => (accountsLoading.value = false)),
+  ])
 }
 
 type PickedRow = Partial<ProductMonth> & { label: string; total?: boolean; ktPct?: number | null }
@@ -108,10 +120,18 @@ function treeRows(nodes: Pl2SellerNode[], parent: string, depth: number): TreeRo
     return { key, name: node.name, depth, node, children: node.children?.length ? treeRows(node.children, key, depth + 1) : undefined }
   })
 }
-const typeRows = computed<TreeRow[]>(() => {
-  if (!details.value?.children.length) return []
-  return [...treeRows(details.value.children, '', 0), { key: '_total', name: 'Tổng', depth: 0, total: true }]
-})
+const withTotal = (nodes: Pl2SellerNode[] | undefined): TreeRow[] =>
+  nodes?.length ? [...treeRows(nodes, '', 0), { key: '_total', name: 'Tổng', depth: 0, total: true }] : []
+const typeRows = computed<TreeRow[]>(() => withTotal(details.value?.children))
+const accountRows = computed<TreeRow[]>(() => withTotal(accounts.value?.children))
+// the two tables of the dialog under the months: the same columns (sales and PL2 KT per month, then the total), other rows
+const breakdowns = computed(() => [
+  { key: 'types', title: 'Theo product type', label: 'Product type / sub product type', rows: typeRows.value, loading: detailsLoading.value,
+    hint: '· số KT: sales (pcs) và PL2 theo KT · bấm ▸ để xem sub product type', empty: 'Chưa có product type nào bán trong khoảng ngày này', maxHeight: undefined },
+  { key: 'accounts', title: 'Theo account', label: 'Account', rows: accountRows.value, loading: accountsLoading.value, maxHeight: 460,
+    hint: accounts.value ? `· ${num(accounts.value.count)} account có bán · sales (pcs) và PL2 theo KT, lớn nhất trước` : '· sales (pcs) và PL2 theo KT, lớn nhất trước',
+    empty: 'Chưa có account nào bán product này trong khoảng ngày này' },
+])
 const typeRowClass = ({ row }: { row: TreeRow }) => (row.total ? 'month-total' : row.depth ? 'child-row' : '')
 // a month the range does not touch has no figures (null); a touched month without sales is 0
 function cell(slot: unknown, month: ProductMonth): { quantity: number; kt: number } | null {
@@ -226,35 +246,38 @@ const muted = (v: number | null | undefined) => (v ? '' : 'text-slate-300')
           </el-table-column>
         </el-table>
 
-        <div class="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Theo product type <span class="font-normal normal-case tracking-normal text-slate-400">· số KT: sales (pcs) và PL2 theo KT · bấm ▸ để xem sub product type</span>
-        </div>
-        <el-table v-loading="detailsLoading" :data="typeRows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="typeRowClass"
-                  size="small" class="w-full" border empty-text="Chưa có product type nào bán trong khoảng ngày này">
-          <el-table-column prop="name" label="Product type / sub product type" min-width="220">
-            <template #default="{ row }"><span :class="row.depth ? 'text-slate-600' : 'font-semibold'">{{ row.name }}</span></template>
-          </el-table-column>
-          <el-table-column v-for="(m, i) in picked.months" :key="m.month" :label="`Tháng ${Number(m.month.slice(0, 2))}`" align="center"
-                           :label-class-name="`mh-${i % 3}`">
-            <el-table-column label="Sales" align="right" width="76" :label-class-name="`mh-${i % 3}`">
-              <template #default="{ row }"><span class="num" :class="muted(cell(row, m)?.quantity)">{{ cell(row, m) ? num(cell(row, m)!.quantity) : '—' }}</span></template>
+        <template v-for="b in breakdowns" :key="b.key">
+          <div class="mb-1 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {{ b.title }} <span class="font-normal normal-case tracking-normal text-slate-400">{{ b.hint }}</span>
+          </div>
+          <el-table v-loading="b.loading" :data="b.rows" row-key="key" :tree-props="{ children: 'children' }" :row-class-name="typeRowClass"
+                    :max-height="b.maxHeight" size="small" class="w-full" border :empty-text="b.empty">
+            <el-table-column prop="name" :label="b.label" min-width="220">
+              <template #default="{ row }"><span :class="row.depth ? 'text-slate-600' : 'font-semibold'">{{ row.name }}</span></template>
             </el-table-column>
-            <el-table-column label="PL2 KT" align="right" width="96" :label-class-name="`mh-${i % 3}`">
-              <template #default="{ row }"><span class="num font-semibold" :class="muted(cell(row, m)?.kt)">{{ cell(row, m) ? moneyRound(cell(row, m)!.kt) : '—' }}</span></template>
+            <el-table-column v-for="(m, i) in picked.months" :key="m.month" :label="`Tháng ${Number(m.month.slice(0, 2))}`" align="center"
+                             :label-class-name="`mh-${i % 3}`">
+              <el-table-column label="Sales" align="right" width="76" :label-class-name="`mh-${i % 3}`">
+                <template #default="{ row }"><span class="num" :class="muted(cell(row, m)?.quantity)">{{ cell(row, m) ? num(cell(row, m)!.quantity) : '—' }}</span></template>
+              </el-table-column>
+              <el-table-column label="PL2 KT" align="right" width="96" :label-class-name="`mh-${i % 3}`">
+                <template #default="{ row }"><span class="num font-semibold" :class="muted(cell(row, m)?.kt)">{{ cell(row, m) ? moneyRound(cell(row, m)!.kt) : '—' }}</span></template>
+              </el-table-column>
             </el-table-column>
-          </el-table-column>
-          <el-table-column label="Tổng" align="center" label-class-name="mh-total">
-            <el-table-column label="Sales" align="right" width="76" label-class-name="mh-total">
-              <template #default="{ row }"><span class="num" :class="muted(overall(row).quantity)">{{ num(overall(row).quantity) }}</span></template>
+            <el-table-column label="Tổng" align="center" label-class-name="mh-total">
+              <el-table-column label="Sales" align="right" width="76" label-class-name="mh-total">
+                <template #default="{ row }"><span class="num" :class="muted(overall(row).quantity)">{{ num(overall(row).quantity) }}</span></template>
+              </el-table-column>
+              <el-table-column label="PL2 KT" align="right" width="96" label-class-name="mh-total">
+                <template #default="{ row }"><span class="num font-semibold" :class="muted(overall(row).kt)">{{ moneyRound(overall(row).kt) }}</span></template>
+              </el-table-column>
             </el-table-column>
-            <el-table-column label="PL2 KT" align="right" width="96" label-class-name="mh-total">
-              <template #default="{ row }"><span class="num font-semibold" :class="muted(overall(row).kt)">{{ moneyRound(overall(row).kt) }}</span></template>
-            </el-table-column>
-          </el-table-column>
-        </el-table>
+          </el-table>
+        </template>
         <div class="mt-2 text-xs text-slate-400">
           Kế hoạch = PL2 của tháng trong KHKD; KH LK = kế hoạch đến hết khoảng ngày đang chọn (tháng lẻ theo ngày). Thực đạt = PL2 KT của các ngày trong khoảng;
-          tháng ngoài khoảng ngày không có số (—). Sub product type không bán thì ẩn; product type của trang vẫn hiện (0).
+          tháng ngoài khoảng ngày không có số (—). Sub product type không bán thì ẩn; product type của trang vẫn hiện (0). Theo account = store của trackingis
+          (store tạm ngưng tính vào store thay thế ở Settings › Plan); phần cộng tay (Felt) không thuộc account nào nên là dòng riêng, để Tổng khớp với thẻ.
         </div>
       </template>
     </el-dialog>
