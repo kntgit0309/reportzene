@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import User
-from app.services import family_plan, family_report, plan, report, seller_plan, settings_store
+from app.services import families, family_plan, family_report, plan, report, seller_plan, settings_store
 from app.services.families import FAMILIES, OTHERS
 from app.services.family_pl2 import REST, with_rest
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
@@ -25,11 +25,13 @@ from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisErr
 METRICS = ("total_order", "total_quantity", "total", "sale_tax", "total_revenue", "avg_order_value")
 
 
-def _catalog() -> dict[str, tuple[str | None, tuple[str, ...]]]:
+def _catalog(all_sub_types: list[str] | tuple[str, ...] = ()) -> dict[str, tuple[str | None, tuple[str, ...]]]:
     """Product name (lower case) → (page key, sub product types): the families first (the plan's "Quilted" is the Quilted
-    page, not Blanket's Quilted type), then the product types of the families."""
-    out: dict[str, tuple[str | None, tuple[str, ...]]] = {f.name.lower(): (f.key, f.sub_types) for f in FAMILIES.values()}
-    for f in FAMILIES.values():
+    page, not Blanket's Quilted type), then the product types of the families; with trackingis' sub product types, a family
+    also has the new ones its claim words take (Ornament: 3D Relief Ornament…)."""
+    fams = [families.claimed(f, all_sub_types) for f in FAMILIES.values()]
+    out: dict[str, tuple[str | None, tuple[str, ...]]] = {f.name.lower(): (f.key, f.sub_types) for f in fams}
+    for f in fams:
         for group, subs in f.groups if len(f.groups) > 1 else ():
             out.setdefault(group.lower(), (f.key, subs))
     return out
@@ -44,11 +46,10 @@ def _default_names() -> list[str]:
 
 def products(names: list[str], all_sub_types: list[str]) -> list[dict[str, Any]]:
     """[{name, page, sub_types}]: the given products in order, then Other products (trackingis order) when any is left."""
-    catalog = _catalog()
+    catalog = _catalog(all_sub_types)
     out = [{"name": n, "page": catalog.get(n.lower(), (None, ()))[0], "sub_types": list(catalog.get(n.lower(), (None, ()))[1])}
            for n in names]
-    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types}
-    rest = [s for s in all_sub_types if s.lower() not in listed]
+    rest = families.rest(all_sub_types)  # what no family lists or claims
     if rest:
         out.append({"name": REST, "page": OTHERS.key, "sub_types": rest})
     return out

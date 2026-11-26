@@ -22,6 +22,10 @@ class Family:
     rest_group: str | None = None
     # The plan prices each product type as a product of its own (Others), not the family as one product (family_pl2)
     rate_by_group: bool = False
+    # A sub product type no family lists joins this family, in `claim_group`, when its name holds one of these words (lower case):
+    # new ornament types trackingis adds (3D Relief Ornament…) count as Ornament rather than as Others' Other products
+    claim_words: tuple[str, ...] = ()
+    claim_group: str | None = None
 
     @property
     def sub_types(self) -> tuple[str, ...]:
@@ -62,6 +66,9 @@ ORNAMENT = Family(
                                       **_spread(122, date(2026, 10, 23), 5), **_spread(75, date(2026, 10, 28), 4),
                                       **_spread(100, date(2026, 11, 1), 3)}},
     fix_note="includes pieces trackingis misses, added by hand (Felt Ornament: +170 pcs over 01–18/10, +130 over 19–22/10, +122 over 23–27/10, +75 over 28–31/10 and +100 over 01–03/11/2026)",
+    # any other sub product type named "… Ornament …" (3D Relief Ornament, added 11/2026) is an ornament of the plan's "Ornament khác"
+    claim_words=("ornament",),
+    claim_group="Others",
 )
 
 # One product type: the plan's T-shirt and Sweatshirt columns are compared together, the sub product types are actuals only
@@ -148,11 +155,39 @@ OTHERS = Family(
 FAMILIES: dict[str, Family] = {f.key: f for f in (ORNAMENT, SHIRT, BLANKET, QUILTED, FLAG, WOODEN_BLOCK, BADGE_REEL, OTHERS)}
 
 
+def _leftover(all_sub_types: list[str] | tuple[str, ...]) -> list[str]:
+    """The trackingis sub product types (in trackingis order, once each) that no family lists by name."""
+    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types}
+    return [s for s in dict.fromkeys(all_sub_types) if s.lower() not in listed]
+
+
+def claimer(sub_type: str) -> Family | None:
+    """The family that takes this sub product type when no family lists it: the first whose claim words its name holds."""
+    low = sub_type.lower()
+    return next((f for f in FAMILIES.values() if f.claim_words and any(w in low for w in f.claim_words)), None)
+
+
+def claimed(family: Family, all_sub_types: list[str] | tuple[str, ...]) -> Family:
+    """The family with the sub product types no family lists that its claim words take (in its claim group)."""
+    if not family.claim_words:
+        return family
+    mine = tuple(s for s in _leftover(all_sub_types) if claimer(s) is family)
+    if not mine:
+        return family
+    return replace(family, groups=tuple((name, (*subs, *mine)) if name == family.claim_group else (name, subs) for name, subs in family.groups))
+
+
+def rest(all_sub_types: list[str] | tuple[str, ...]) -> list[str]:
+    """Every trackingis sub product type that no family lists or claims: Others' rest group, Other products."""
+    return [s for s in _leftover(all_sub_types) if claimer(s) is None]
+
+
 def with_rest(family: Family, all_sub_types: list[str]) -> Family:
-    """The family with its rest group: every trackingis sub product type (in trackingis order) that no family lists.
-    A family without a rest group, or with nothing left over, is returned as it is."""
+    """The family as trackingis lists its sub product types today: the ones its claim words take (Ornament), and for the family
+    with a rest group (Others) every one no family lists or claims, in trackingis order. A family with nothing to add is
+    returned as it is."""
+    family = claimed(family, all_sub_types)
     if not family.rest_group:
         return family
-    listed = {s.lower() for f in FAMILIES.values() for s in f.sub_types}
-    rest = tuple(s for s in all_sub_types if s.lower() not in listed)
-    return replace(family, groups=(*family.groups, (family.rest_group, rest))) if rest else family
+    left = tuple(rest(all_sub_types))
+    return replace(family, groups=(*family.groups, (family.rest_group, left))) if left else family

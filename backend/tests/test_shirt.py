@@ -46,6 +46,8 @@ def upstream(monkeypatch):
     calls: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/filter/sub-product-type"):  # trackingis' sub product types: nothing new for Ornament to claim
+            return httpx.Response(200, json={"success": True, "data": []})
         calls.append(req)
         q = parse_qs(urlparse(str(req.url)).query)
         subs = q.get("sub_product_types[]", [])

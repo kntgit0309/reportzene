@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.models import User
 from app.services import families, family_plan, family_pl2, report, settings_store
 from app.services.families import Family
@@ -40,10 +41,17 @@ def _only(q: ReportQuery, subs: tuple[str, ...]) -> ReportQuery:
 
 
 def resolve(db: Session, family: Family, user: User | None) -> Family:
-    """The family as reported: its rest group (Others) filled with trackingis' current sub product types."""
-    if not family.rest_group:
+    """The family as reported, with trackingis' current sub product types: its rest group (Others) filled, the new ones its
+    claim words take (Ornament) added."""
+    if not (family.rest_group or family.claim_words):
         return family
-    return families.with_rest(family, [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)])
+    try:
+        listed = [str(o["name"]) for o in report.filter_options(db, "sub_product_types", user)]
+    except AppError:
+        if family.rest_group:  # Others cannot be told without the list
+            raise
+        return family  # the new types cannot be listed now: the family's own types still report
+    return families.with_rest(family, listed)
 
 
 def _product_types(client: TrackingisClient, q: ReportQuery) -> list[dict[str, Any]]:

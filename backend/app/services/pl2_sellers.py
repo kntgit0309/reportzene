@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.models import User
-from app.services import family_accounts, family_plan, family_report, overview, report, seller_cf, seller_plan, settings_store
+from app.services import families, family_accounts, family_plan, family_report, overview, report, seller_cf, seller_plan, settings_store
 from app.services.families import FAMILIES
 from app.services.pl2_accounts import _sheet
 from app.services.trackingis import ReportQuery, TrackingisClient, TrackingisError
@@ -95,6 +95,7 @@ def _children(line: dict[str, Any], sold: dict[str, dict[str, int]]) -> list[dic
         return [n for n in (_node(s, [s], sold, rate) for s in subs) if n["quantity"]]
 
     family = FAMILIES.get(line.get("page") or "")
+    family = families.claimed(family, line["sub_types"]) if family is not None else None  # the new types it takes (3D Relief Ornament…)
     if family is not None and family.name.lower() == line["name"].lower() and len(family.groups) > 1:
         out = []
         for group, subs in family.groups:
