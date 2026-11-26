@@ -5,7 +5,9 @@ import pytest
 
 from app.models import SheetSource
 from app.services import report, trackingis
-from app.services.families import OTHERS, SHIRT, with_rest
+from app.services.families import ORNAMENT, OTHERS, SHIRT, with_rest
+from app.services.overview import products
+from app.services.pl2_sellers import _children
 from app.services.family_plan import parse, plan_for
 from tests.test_overview import business_plan  # noqa: F401  (fixture: KHKD "KH theo Product": no line for Others' products)
 from tests.test_report import _save_token
@@ -86,6 +88,25 @@ def test_the_rest_group_takes_what_no_family_lists():
     assert others.groups[-1] == ("Other products", tuple(REST))
     assert with_rest(OTHERS, ["Shirt", "Sticker"]) == OTHERS  # nothing left over: no rest group (it would filter nothing)
     assert with_rest(SHIRT, TRACKINGIS_SUBS) == SHIRT
+
+
+def test_a_new_ornament_type_counts_as_ornament_not_as_other_products():
+    subs = [*TRACKINGIS_SUBS, "3D Relief Ornament", "Piggy Bank"]  # two sub product types no family lists, one named "… Ornament"
+    others = with_rest(OTHERS, subs)
+    assert others.groups[-1] == ("Other products", ("Crochet", "Digital", "Piggy Bank"))  # not 3D Relief Ornament
+    ornament = with_rest(ORNAMENT, subs)
+    assert dict(ornament.groups)["Others"][-1] == "3D Relief Ornament"  # the plan's "Ornament khác"
+    assert dict(ornament.groups)["Acrylic + Wood"] == dict(ORNAMENT.groups)["Acrylic + Wood"]
+    assert "3D Relief Ornament" in ornament.sub_types and "3D Relief Ornament" not in ORNAMENT.sub_types  # the family itself is left as it is
+    assert with_rest(ORNAMENT, TRACKINGIS_SUBS) == ORNAMENT  # nothing new: as it is
+
+    lines = {line["name"]: line for line in products(["Ornament", "Sticker"], subs)}  # the products of the plan, then Other products
+    assert lines["Ornament"]["sub_types"][-1] == "3D Relief Ornament" and lines["Ornament"]["page"] == "ornament"
+    assert lines["Other products"]["sub_types"] == ["Crochet", "Digital", "Piggy Bank"]
+
+    # a product card's tree: the new type sits under Others with its own pieces
+    tree = {n["name"]: n for n in _children({**lines["Ornament"], "rate": 6.0}, {"3d relief ornament": {"11-2026": 2}})}
+    assert tree["Others"]["quantity"] == 2 and [c["name"] for c in tree["Others"]["children"]] == ["3D Relief Ornament"]
 
 
 def test_others_report(client, member, upstream, plan_sheet, monkeypatch):

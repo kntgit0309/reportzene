@@ -21,7 +21,7 @@ export type Family = {
 export const FAMILIES: Record<FamilyKey, Family> = {
   ornament: {
     key: 'ornament', name: 'Ornament', plural: 'ornaments', icon: Present,
-    groupsNote: 'Product types group trackingis sub product types (Wooden Garland is in Others).',
+    groupsNote: 'Product types group trackingis sub product types (Wooden Garland is in Others; any new sub product type named "… Ornament", such as 3D Relief Ornament, joins Others too).',
     planNote: 'Acrylic and Wood together are Acrylic + Wood, "Ornament khác" is Others.',
     planSheetHint: 'The "KH Ornament" tab: a "Shop Name | Team" label row, then per month a "Total" column and the categories, in pieces.',
     accountParts: 'Product type',
@@ -85,7 +85,7 @@ export const FAMILIES: Record<FamilyKey, Family> = {
   others: {
     key: 'others', name: 'Others', plural: 'other products', icon: Grid,
     groupsNote: 'Sticker, Scrub cap, Fabric Welcome Sign and Baseball Jersey are the products of KH SP khác; Other products takes '
-      + 'every trackingis sub product type no other report covers (new ones too), its rows per trackingis product type.',
+      + 'every trackingis sub product type no other report covers (new ones too, except those named "… Ornament": they count in Ornament › Others), its rows per trackingis product type.',
     planNote: 'KH SP khác plans per product for ZenE as a whole, so it only compares with all ZenE teams and stores.',
     planSheetHint: 'The "Others" tab (sheet "KH SP khác"): "Product | PL2/item | … | MM-YYYY", one row per product; the first block '
       + 'of months is the sales per month, in pieces.',

@@ -22,6 +22,8 @@ def upstream(monkeypatch):
     calls: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/filter/sub-product-type"):  # trackingis' sub product types: nothing new for Ornament to claim
+            return httpx.Response(200, json={"success": True, "data": []})
         calls.append(req)
         if req.headers.get("authorization") == "Bearer expired":
             time.sleep(0.05)  # network latency: the queries still queued behind the running ones get cancelled
