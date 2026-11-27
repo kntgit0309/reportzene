@@ -6,7 +6,7 @@
 #   clone (read-only deploy key, host alias github-reportzene):  ~/reportzene-autodeploy/repo
 #   state / log:     ~/reportzene-autodeploy/{deployed_sha,failed_sha,autodeploy.log,last_tests.log,last_build.log}
 #   installed copy:  ~/reportzene-autodeploy/autodeploy.sh  (refreshed after every successful deploy)
-#   launchd:         com.isuccess.reportzene-autodeploy (StartInterval 60)
+#   launchd:         com.isuccess.reportzene-autodeploy (StartCalendarInterval {} = every minute; StartInterval jobs stopped firing on macminiwork 2026-11-19)
 #
 # The app's own launchd plist (secrets: SSO key/secret, allow-list) is never touched here: change it with
 # deploy/deploy.sh from a machine that has SSH access.
